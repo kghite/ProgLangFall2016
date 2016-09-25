@@ -1,16 +1,16 @@
 ############################################################
 # HOMEWORK 3
 #
-# Team members:
+# Team members: Andrew Deaver, Kathryn Hite
 #
-# Emails:
+# Emails: andrew.deaver@students.olin.edu, kathryn.hite@students.olin.edu
 #
 # Remarks:
 #
 
 
 import sys
-from pyparsing import Word, Literal,  Keyword, Forward, alphas, alphanums
+from pyparsing import Word, Literal,  Keyword, Forward, alphas, alphanums, Empty
 
 
 #
@@ -126,6 +126,9 @@ class ELet (Exp):
         self._e2 = e2
 
     def __str__ (self):
+        print "Binding list length:" + str(len(self._bindings))
+        print "First binding element:" + str(self._bindings[0])
+        print self._bindings
         return "ELet([{}],{})".format(",".join([ "({},{})".format(id,str(exp)) for (id,exp) in self._bindings ]),self._e2)
 
     def eval (self,fun_dict):
@@ -308,11 +311,13 @@ def parse (input):
     pIF = "(" + Keyword("if") + pEXPR + pEXPR + pEXPR + ")"
     pIF.setParseAction(lambda result: EIf(result[2],result[3],result[4]))
 
-    pBINDING = "(" + pNAME + pEXPR + ")"
-    pBINDING.setParseAction(lambda result: (result[1],result[2]))
+    pBINDING = Forward()
 
-    pLET = "(" + Keyword("let") + "(" + pBINDING + ")" + pEXPR + ")"
-    pLET.setParseAction(lambda result: ELet([result[3]],result[5]))
+    pBINDING << "(" + pNAME + pEXPR + ")" + (pBINDING | ")")
+    pBINDING.setParseAction(parseBinding)
+
+    pLET = "(" + Keyword("let") + "(" + pBINDING + pEXPR + ")"
+    pLET.setParseAction(lambda result: ELet(result[3], result[4]))
 
     pPLUS = "(" + Keyword("+") + pEXPR + pEXPR + ")"
     pPLUS.setParseAction(lambda result: ECall("+",[result[2],result[3]]))
@@ -325,12 +330,22 @@ def parse (input):
     result = pEXPR.parseString(input)[0]
     return result    # the first element of the result is the expression
 
+def parseBinding(result):
+    # WHAT THE FUCK EVEN IS PYTHON?
+    a = []
+    a.append(tuple([result[1], result[2]]))
+
+    if(type(result[4]) is tuple):
+        a.append(result[4])
+
+    return [a]
+
 
 def shell ():
     # A simple shell
     # Repeatedly read a line of input, parse it, and evaluate the result
 
-    print "Homework 3 - Calc Language"
+    print "Homework 3 - Calc Language" 
     while True:
         inp = raw_input("calc> ")
         if not inp:
