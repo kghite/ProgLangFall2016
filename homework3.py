@@ -126,9 +126,6 @@ class ELet (Exp):
         self._e2 = e2
 
     def __str__ (self):
-        print "Binding list length:" + str(len(self._bindings))
-        print "First binding element:" + str(self._bindings[0])
-        print self._bindings
         return "ELet([{}],{})".format(",".join([ "({},{})".format(id,str(exp)) for (id,exp) in self._bindings ]),self._e2)
 
     def eval (self,fun_dict):
@@ -136,7 +133,9 @@ class ELet (Exp):
         new_e2 = self._e2
         for (id,e) in self._bindings:
             v = e.eval(fun_dict)
-            new_e2 = new_e2.substitute(id,EValue(v))
+            print v
+            new_e2 = new_e2.substitute(id._id,EValue(v))
+            print new_e2
         return new_e2.eval(fun_dict)
 
     def substitute (self,id,new_e):
@@ -172,6 +171,8 @@ class ECall (Exp):
         self._exps = es
 
     def __str__ (self):
+        print "CALL NAME: " + self._name
+        print "CALL EXPR: " + str(self._exps)
         return "ECall({},[{}])".format(self._name,",".join([ str(e) for e in self._exps]))
 
     def eval (self,fun_dict):
@@ -271,7 +272,7 @@ INITIAL_FUN_DICT = {
 
 
 ##
-## PARSER
+## PARSER OPTIONS
 ##
 # cf http://pyparsing.wikispaces.com/
 
@@ -308,6 +309,16 @@ def parse (input):
 
     pEXPR = Forward()
 
+    pEXPRS = Forward()
+
+    pEXPRS << pEXPR + (pEXPRS | ")")
+    pEXPRS.setParseAction(parseList)
+
+    pPARAMS = Forward()
+
+    pPARAMS << pNAME + (pPARAMS | ")")
+    pPARAMS.setParseAction(parseList)
+
     pIF = "(" + Keyword("if") + pEXPR + pEXPR + pEXPR + ")"
     pIF.setParseAction(lambda result: EIf(result[2],result[3],result[4]))
 
@@ -325,13 +336,19 @@ def parse (input):
     pTIMES = "(" + Keyword("*") + pEXPR + pEXPR + ")"
     pTIMES.setParseAction(lambda result: ECall("*",[result[2],result[3]]))
 
-    pEXPR << (pINTEGER | pBOOLEAN | pIDENTIFIER | pIF | pLET | pPLUS | pTIMES)
+    pFUNC = "(" + pNAME + pEXPRSEQ
+    pFUNC.setParseAction(lambda result: ECall(result[1], result[2]))
+
+    pDEF = "(" + Keyword("defun") + pNAME + "(" + pPARAMS + pEXPR + ")"
+    pDEF.setParseAction(parseDef)
+
+    pEXPR << (pINTEGER | pBOOLEAN | pIDENTIFIER | pIF | pLET | pPLUS | pTIMES | pDEF | pFUNC )
 
     result = pEXPR.parseString(input)[0]
     return result    # the first element of the result is the expression
 
+# Break out binding functions
 def parseBinding(result):
-    # WHAT THE FUCK EVEN IS PYTHON?
     a = []
     a.append(tuple([result[1], result[2]]))
 
@@ -340,17 +357,170 @@ def parseBinding(result):
 
     return [a]
 
+def parseList(result):
+    a = [result[0]]
+    
+    if type(result[1]) is list:
+        a += result[1]
+    print "Param List: " + str(a)
+    return [a]
+
+def parseDef(result):
+    # Add new function to the dictionary
+    INITIAL_FUN_DICT[result[2]] = {"params": result[4], "body": result[5]}
+    return EBoolean(True)
+
+def parse_natural (input):
+    # parse a natural string into an element of the abstract representation
+
+    # <expr> ::= <integer>
+    #          true
+    #          false
+    #          <identifier>
+    #          ( expr )
+    #          <expr> ? <expr> : <expr>
+    #          let ( <bindings> ) <expr>
+    #          <expr> + <expr>
+    #          <expr> * <expr>
+    #          <expr> - <expr>
+    #          <name> ( <expr-seq> )
+
+    # <bindings> ::= <name> = <expr> , <bindings>
+    #              <name> = <expr>
+
+    # <expr-seq> ::= <expr> , <expr-seq>
+    #              <expr>    
+
+
+    idChars = alphas+"_+*-?!=<>"
+
+    pIDENTIFIER = Word(idChars, idChars+"0123456789")
+    pIDENTIFIER.setParseAction(lambda result: EId(str(result[0])))
+
+    # A name is like an identifier but it does not return an EId...
+    pNAME = Word(idChars,idChars+"0123456789")
+
+    pINTEGER = Word("-0123456789","0123456789")
+    pINTEGER.setParseAction(lambda result: EInteger(int(result[0])))
+
+    pBOOLEAN = Keyword("true") | Keyword("false")
+    pBOOLEAN.setParseAction(lambda result: EBoolean(result[0]=="true"))
+
+    pBASICEXPR = Forward()
+    pEXPROPR = Forward()
+    pEXPR = Forward()
+    pEXPRSEQ = Forward()
+    pBINDINGS = Forward()
+
+    pBINDINGS << pIDENTIFIER + Keyword("=") + pBASICEXPR + (")" | "," + pBINDINGS) 
+    pBINDINGS.setParseAction(parseNaturalBinding)
+
+    pBASICEXPR << (pINTEGER + pEXPROPR | pBOOLEAN + pEXPROPR  | pINTEGER | pBOOLEAN | pIDENTIFIER + pEXPROPR | pIDENTIFIER)
+    pBASICEXPR.setParseAction(append_left)
+
+    pEXPRSEQ << pBASICEXPR + (")" | "," + pEXPRSEQ)
+    pEXPRSEQ.setParseAction(parseNaturalList)
+
+    pADD = Keyword("+") + pBASICEXPR
+    pADD.setParseAction(lambda result: ECall("+", [result[1]]))
+
+    pTIMES  = Keyword("*") + pBASICEXPR
+    pTIMES.setParseAction(lambda result: ECall("*", [result[1]]))
+
+    pMINUS  = Keyword("-") + pBASICEXPR
+    pMINUS.setParseAction(lambda result: ECall("-", [result[1]]))
+
+    pIF = Keyword("?") + pBASICEXPR + ":" + pBASICEXPR
+    pIF.setParseAction(lambda result: EIf(None, result[1], result[3]))
+
+    pLET = Keyword("let") + "(" + pBINDINGS + pBASICEXPR
+    pLET.setParseAction(lambda result: ELet(result[2], result[3]))
+
+    pFUNC = pNAME + "(" + pEXPRSEQ
+    pFUNC.setParseAction(lambda result: ECall(result[0], result[2]))
+
+    pEXPROPR << (pTIMES | pADD | pMINUS | pIF)
+
+    pEXPR << (pFUNC | pLET | pBASICEXPR | pEXPROPR)
+    result = pEXPR.parseString(input)[0]
+    return result    # the first element of the result is the expression
+
+## natural shell helper functions
+
+def append_left(result):
+    if(len(result) == 2):
+        if type(result[1]) == ECall:
+            if type(result[1]._exps[0]) == ECall:
+              return flip_expressions(result[0], result[1])
+            result[1]._exps.append(result[0])
+            return result[1]
+        if type(result[1]) == EIf:
+            result[1]._cond = result[0] 
+            return result[1]
+    return result[0]
+
+
+def flip_expressions(inside, outside):
+    if outside._name == "*" and outside._exps[0]._name == "+":
+        new_outside = outside._exps.pop(0)
+        exp_temp = new_outside._exps.pop(1)
+
+        outside._exps.append(inside)
+        outside._exps.append(exp_temp)
+
+        new_outside._exps.append(outside)
+        return new_outside
+    else:
+        outside._exps.append(inside)
+        return outside
+
+
+def parseNaturalBinding(result):
+    print result
+    a = []
+    a.append(tuple([result[0], result[2]]))
+
+    if(len(result) == 5 and type(result[4]) is list):
+        a += result[4]
+
+    return [a]
+
+def parseNaturalList(result):
+    a = [result[0]]
+    
+    if len(result) == 3 and type(result[2]) is list:
+        a += result[2]
+    print "Param List: " + str(a)
+    return [a]
+
+## 
+## SHELL OPTIONS
+##
 
 def shell ():
     # A simple shell
     # Repeatedly read a line of input, parse it, and evaluate the result
 
-    print "Homework 3 - Calc Language" 
+    print "Homework 3 - Calc Language - Shell" 
     while True:
         inp = raw_input("calc> ")
         if not inp:
             return
         exp = parse(inp)
+        print "Abstract representation:", exp
+        v = exp.eval(INITIAL_FUN_DICT)
+        print v
+
+def shell_natural ():
+    # A simple shell
+    # Repeatedly read a line of input, parse it, and evaluate the result
+
+    print "Homework 3 - Calc Language - Natural Shell" 
+    while True:
+        inp = raw_input("calc> ")
+        if not inp:
+            return
+        exp = parse_natural(inp)
         print "Abstract representation:", exp
         v = exp.eval(INITIAL_FUN_DICT)
         print v
