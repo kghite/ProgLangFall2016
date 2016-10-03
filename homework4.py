@@ -320,13 +320,31 @@ def parse (input):
     pLET = "(" + Keyword("let") + "(" + pBINDINGS + ")" + pEXPR + ")"
     pLET.setParseAction(lambda result: ELet(result[3],result[5]))
 
+    pLET_STAR = "(" + Keyword("let*") + "(" + pBINDINGS + ")" + pEXPR + ")"
+    pLET_STAR.setParseAction(lambda result: handleLetStar(result[3], result[5]))
+
     pEXPRS = ZeroOrMore(pEXPR)
     pEXPRS.setParseAction(lambda result: [result])
+
+    pAND = "(" + Keyword("and") + pEXPRS + ")"
+    pAND.setParseAction(lambda result: handleAnd(result[2]))
+
+    pOR = "(" + Keyword("or") + pEXPRS + ")"
+    pOR.setParseAction(lambda result: handleOr(result[2]))
+
+    pCASE = "(" + pEXPR + pEXPR + ")"
+    pCASE.setParseAction(lambda result: (result[1], result[2]))
+
+    pCASES = ZeroOrMore(pCASE)
+    pCASES.setParseAction(lambda result: [result])
+
+    pSWITCH = "(" + Keyword("cond") + pCASES + ")"
+    pSWITCH.setParseAction(lambda result: handleSwitch(result[2]))
 
     pCALL = "(" + pNAME + pEXPRS + ")"
     pCALL.setParseAction(lambda result: ECall(result[1],result[2]))
 
-    pEXPR << (pINTEGER | pBOOLEAN | pIDENTIFIER | pIF | pLET | pCALL)
+    pEXPR << (pINTEGER | pBOOLEAN | pIDENTIFIER | pAND | pOR | pIF | pLET_STAR | pLET | pSWITCH | pCALL)
 
     # can't attach a parse action to pEXPR because of recursion, so let's duplicate the parser
     pTOPEXPR = pEXPR.copy()
@@ -343,6 +361,37 @@ def parse (input):
     result = pTOP.parseString(input)[0]
     return result    # the first element of the result is the expression
 
+
+def handleAnd(expr_list):
+    if(len(expr_list) == 0):
+        return EBoolean(True)
+    elif(len(expr_list) == 1):
+        return expr_list[0]
+    else:
+        expr = expr_list[0]
+        expr_list = expr_list[1:]
+        return EIf(expr, handleAnd(expr_list), EBoolean(False))
+
+def handleOr(expr_list):
+    if(len(expr_list) == 0):
+        return EBoolean(False)
+    elif(len(expr_list) == 1):
+        return expr_list[0]
+    else:
+        expr = expr_list[0]
+        expr_list = expr_list[1:]
+        return EIf(expr, EBoolean(True), handleOr(expr_list))   
+
+def handleLetStar(binding_list, expression):
+    if(len(binding_list) == 1):
+        return ELet([binding_list[0]], expression)
+    return ELet([binding_list[0]], handleLetStar(binding_list[1:], expression))
+
+
+def handleSwitch(conditions):
+    if(len(conditions) == 0):
+        return EBoolean(False)
+    return EIf(conditions[0][0], conditions[0][1], handleSwitch(conditions[1:]))
 
 def shell ():
     # A simple shell
