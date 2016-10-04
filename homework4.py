@@ -1,9 +1,9 @@
 ############################################################
 # HOMEWORK 4
 #
-# Team members:
+# Team members: Andrew Deaver, Kathryn Hite
 #
-# Emails:
+# Emails: Andrew.Deaver@students.olin.edu, Kathryn.Hite@students.olin.edu
 #
 # Remarks:
 #
@@ -33,6 +33,9 @@ class EValue (Exp):
     def eval (self,fun_dict):
         return self._value
 
+    def evalEnv (self,fun_dict, env):
+        return self._value
+
     def substitute (self,id,new_e):
         return self
 
@@ -49,6 +52,9 @@ class EInteger (Exp):
     def eval (self,fun_dict):
         return VInteger(self._integer)
 
+    def evalEnv (self,fun_dict, env):
+        return VInteger(self._integer)
+
     def substitute (self,id,new_e):
         return self
 
@@ -63,6 +69,9 @@ class EBoolean (Exp):
         return "EBoolean({})".format(self._boolean)
 
     def eval (self,fun_dict):
+        return VBoolean(self._boolean)
+
+    def evalEnv(self, fun_dict, env):
         return VBoolean(self._boolean)
 
     def substitute (self,id,new_e):
@@ -84,6 +93,10 @@ class EPrimCall (Exp):
 
     def eval (self,fun_dict):
         vs = [ e.eval(fun_dict) for e in self._exps ]
+        return apply(self._prim,vs)
+
+    def evalEnv(self, fun_dict, env):
+        vs = [ e.evalEnv(fun_dict, env) for e in self._exps ]
         return apply(self._prim,vs)
 
     def substitute (self,id,new_e):
@@ -111,6 +124,15 @@ class EIf (Exp):
         else:
             return self._else.eval(fun_dict)
 
+    def evalEnv(self, fun_dict, env):
+        v = self._cond.evalEnv(self, fun_dict, env)
+        if v.type != "boolean":
+            raise Exception ("Runtime error: condition not a Boolean")
+        if v.value:
+            return self._then.evalEnv(fun_dict, env)
+        else:
+            return self._else.evalEnv(fun_dict, env)
+
     def substitute (self,id,new_e):
         return EIf(self._cond.substitute(id,new_e),
                    self._then.substitute(id,new_e),
@@ -137,6 +159,13 @@ class ELet (Exp):
             new_e2 = new_e2.substitute(id,EValue(v))
         return new_e2.eval(fun_dict)
 
+    def evalEnv(self, fun_dict, env):
+        new_env = {binding[0]:binding[1].evalEnv(fun_dict, env) for binding in self._bindings}
+        env.append(new_env)
+        new_e2 = self._e2.evalEnv(fun_dict, env)
+        env.pop()
+        return new_e2
+
     def substitute (self,id,new_e):
         new_bindings = [ (bid,be.substitute(id,new_e)) for (bid,be) in self._bindings]
         if id in [ bid for (bid,_) in self._bindings]:
@@ -154,6 +183,12 @@ class EId (Exp):
         return "EId({})".format(self._id)
 
     def eval (self,fun_dict):
+        raise Exception("Runtime error: unknown identifier {}".format(self._id))
+
+    def evalEnv(self, fun_dict, env):
+        for index in range(len(env)-1, -1, -1):
+            if(self._id in env[index].keys()):
+                return env[index][self._id]
         raise Exception("Runtime error: unknown identifier {}".format(self._id))
 
     def substitute (self,id,new_e):
@@ -181,6 +216,18 @@ class ECall (Exp):
         for (val,p) in zip(vs,params):
             body = body.substitute(p,EValue(val))
         return body.eval(fun_dict)
+
+    def evalEnv(self, fun_dict, env):
+        vs = [ e.evalEnv(fun_dict, env) for e in self._exps ]
+        params = fun_dict[self._name]["params"]
+        body = fun_dict[self._name]["body"]
+        if len(params) != len(vs):
+            raise Exception("Runtime error: wrong number of argument calling function {}".format(self._name))
+        new_env = {params[i]:vs[i] for i in range(len(params))}
+        env.append(new_env)
+        e_final = body.evalEnv(fun_dict, env)
+        env.pop()
+        return e_final
 
     def substitute (self,var,new_e):
         new_es = [ e.substitute(var,new_e) for e in self._exps]
@@ -411,6 +458,31 @@ def shell ():
             exp = result["expr"]
             print "Abstract representation:", exp
             v = exp.eval(fun_dict)
+            print v
+        elif result["result"] == "function":
+            # a result is already of the right form to put in the
+            # functions dictionary
+            fun_dict[result["name"]] = result
+            print "Function {} added to functions dictionary".format(result["name"])
+
+def shellEnv ():
+    # A simple shell
+    # Repeatedly read a line of input, parse it, and evaluate the result
+
+    print "Homework 4 - Calc Language"
+
+    # work on a copy because we'll be adding to it
+    fun_dict = INITIAL_FUN_DICT.copy()
+    
+    while True:
+        inp = raw_input("calc_env> ")
+        if not inp:
+            return
+        result = parse(inp)
+        if result["result"] == "expression":
+            exp = result["expr"]
+            print "Abstract representation:", exp
+            v = exp.evalEnv(fun_dict, [])
             print v
         elif result["result"] == "function":
             # a result is already of the right form to put in the
