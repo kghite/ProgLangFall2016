@@ -1,11 +1,11 @@
 ############################################################
 # HOMEWORK 5
 #
-# Team members:
+# Team members: Andrew Deaver, Kathryn Hite
 #
-# Emails:
+# Emails: Andrew.Deaver@students.olin.edu, Kathryn.Hite@students.olin.edu
 #
-# Remarks:
+# Remarks: 
 #
 
 
