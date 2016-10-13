@@ -503,6 +503,15 @@ def curry_parse_fun(exprs, func):
     else:
         return EFunction(exprs[0], curry_parse_fun(exprs[1:], func))
 
+def curry_create_closure(params, body, env, depth):
+    if depth == 1:
+        return VClosure([params[0]], curry_create_closure(params[1:], body, env, depth+1), env)
+    else:
+        if len(params) <= 1:
+            return EFunction(params, body)
+        else:
+            return EFunction([params[0]], curry_create_closure(params[1:], body, env, depth+1))
+
 def shell_curry ():
 
     print "Homework 5 - Func Language"
@@ -528,7 +537,7 @@ def shell_curry ():
             # the top-level environment is special, it is shared
             # amongst all the top-level closures so that all top-level
             # functions can refer to each other
-            env.insert(0,(result["name"],VClosure([result["params"]],result["body"],env)))
+            env.insert(0,(result["name"],curry_create_closure(result["params"], result["body"], env, 1)))
             print "Function {} added to top-level environment".format(result["name"])
 
         # except Exception as e:
