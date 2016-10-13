@@ -109,15 +109,19 @@ class ECall (Exp):
 class EFunction (Exp):
     # Creates an anonymous function
 
-    def __init__ (self,params,body):
+    def __init__ (self,params,body,name=""):
         self._params = params
         self._body = body
+        self._func_name = name
 
     def __str__ (self):
         return "EFunction({},{})".format(str(self._params),str(self._body))
 
     def eval (self,env):
-        return VClosure(self._params,self._body,env)
+        n_closure = VClosure(self._params,self._body,env)
+        if(self._func_name != ""):
+            n_closure.env.insert(0, tuple([self._func_name, n_closure]))
+        return n_closure
 
     
 #
@@ -191,47 +195,40 @@ def oper_zero (v1):
 # this initial environment works with Q1 when you've completed it
 
 def initial_env ():
-    # A sneaky way to allow functions to refer to functions that are not
-    # yet defined at top level, or recursive functions
     env = []
-    base = [ 
+    env.insert(0,
         ("+",
          VClosure(["x","y"],EPrimCall(oper_plus,
                                       [EId("x"),EId("y")]),
-                  env)),
+                  env)))
+    env.insert(0,
         ("-",
          VClosure(["x","y"],EPrimCall(oper_minus,
                                       [EId("x"),EId("y")]),
-                  env)),
+                  env)))
+    env.insert(0,
         ("*",
          VClosure(["x","y"],EPrimCall(oper_times,
                                       [EId("x"),EId("y")]),
-                  env)),
+                  env)))
+    env.insert(0,
         ("zero?",
          VClosure(["x"],EPrimCall(oper_zero,
                                   [EId("x")]),
-                  env)),
+                  env)))
+    env.insert(0,
         ("square",
          VClosure(["x"],ECall(EId("*"),[EId("x"),EId("x")]),
-                  env)),
+                  env)))
+    env.insert(0,
         ("=",
          VClosure(["x","y"],ECall(EId("zero?"),
                                   [ECall(EId("-"),[EId("x"),EId("y")])]),
-                  env)),
+                  env)))
+    env.insert(0,
         ("+1",
          VClosure(["x"],ECall(EId("+"),[EId("x"),EValue(VInteger(1))]),
-                  env)),
-        ("sum_from_to",
-         VClosure(["s","e"],
-                  EIf(ECall(EId("="),[EId("s"),EId("e")]),
-                      EId("s"),
-                      ECall(EId("+"),[EId("s"),
-                                       ECall(EId("sum_from_to"),
-                                             [ECall(EId("+1"),[EId("s")]),
-                                              EId("e")])])),
-                  env)),
-    ]
-    env.extend(base)
+                  env)))
     return env
 
 
@@ -303,9 +300,12 @@ def parse (input):
     pCALL.setParseAction(lambda result: ECall(result[1],result[2]))
 
     pFUN = "(" + Keyword("function") + "(" + pNAMES + ")" + pEXPR + ")"
-    pFUN.setParseAction(lambda result: EFunction(result[3],result[5]))
+    pFUN.setParseAction(lambda result: EFunction(result[3],result[5], name=""))
 
-    pEXPR << (pINTEGER | pBOOLEAN | pIDENTIFIER | pIF | pLET | pFUN | pCALL)
+    pFUN_RECURS = "(" + Keyword("function") + pNAME + "(" + pNAMES + ")" + pEXPR + ")"
+    pFUN_RECURS.setParseAction(lambda result: EFunction(result[4],result[6], name=result[2]))
+
+    pEXPR << (pINTEGER | pBOOLEAN | pIDENTIFIER | pIF | pLET | pFUN | pFUN_RECURS | pCALL)
     # can't attach a parse action to pEXPR because of recursion, so let's duplicate the parser
     pTOPEXPR = pEXPR.copy()
     pTOPEXPR.setParseAction(lambda result: {"result":"expression","expr":result[0]})
@@ -370,50 +370,43 @@ sys.setrecursionlimit(10000)
 
 
 def initial_env_curry ():
-    # A sneaky way to allow functions to refer to functions that are not
-    # yet defined at top level, or recursive functions
     env = []
-    base = [ 
+    env.insert(0,
         ("+",
          VClosure(["x"],EFunction("y",EPrimCall(oper_plus,
                                               [EId("x"),EId("y")])),
-                  env)),
+                  env)))
+    env.insert(0,
         ("-",
          VClosure(["x"],EFunction("y",EPrimCall(oper_minus,
                                               [EId("x"),EId("y")])),
-                  env)),
+                  env)))
+    env.insert(0,
         ("*",
          VClosure(["x"],EFunction("y",EPrimCall(oper_times,
                                               [EId("x"),EId("y")])),
-                  env)),
+                  env)))
+    env.insert(0,
         ("zero?",
          VClosure(["x"],EPrimCall(oper_zero,
                                          [EId("x")]),
-                           env)),
+                           env)))
+    env.insert(0,
         ("square",
          VClosure(["x"],ECall(ECall(EId("*"),[EId("x")]),
                             [EId("x")]),
-                  env)),
+                  env)))
+    env.insert(0,
         ("=",
          VClosure(["x"],EFunction("y",ECall(EId("zero?"),
                                           [ECall(ECall(EId("-"),[EId("x")]),
                                                  [EId("y")])])),
-                  env)),
+                  env)))
+    env.insert(0,
         ("+1",
          VClosure(["x"],ECall(ECall(EId("+"),[EId("x")]),
                             [EValue(VInteger(1))]),
-                  env)),
-        ("sum_from_to",
-         VClosure(["s"],EFunction("e",
-                                  EIf(ECall(ECall(EId("="),[EId("s")]),[EId("e")]),
-                                      EId("s"),
-                                      ECall(ECall(EId("+"),[EId("s")]),
-                                            [ECall(ECall(EId("sum_from_to"),
-                                                         [ECall(EId("+1"),[EId("s")])]),
-                                                   [EId("e")])]))),
-                  env)),
-    ]
-    env.extend(base)
+                  env)))
     return env
 
 
