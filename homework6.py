@@ -408,7 +408,7 @@ def parse_imp (input):
     pESC_STR = Keyword("~") + '"'
     pESC_STR.setParseAction(lambda result: result[1])
 
-    pSTRING_CONTENT = ZeroOrMore(pESC_STR | pESC_ESC | pCHARS | White(' ', max=1))
+    pSTRING_CONTENT = ZeroOrMore(pESC_STR | pESC_ESC | pCHARS | White(' ', max=1)).leaveWhitespace()
     pSTRING_CONTENT.setParseAction(lambda result: [result])
 
     pSTRING = '\"' + pSTRING_CONTENT + '\"'
@@ -434,20 +434,23 @@ def parse_imp (input):
 
     pEXPR << (pINTEGER | pBOOLEAN | pSTRING | pIDENTIFIER | pIF | pFUN | pCALL)
 
+    pSTMT = Forward()
+
+    pPROD = Keyword("procedure") + pNAME + "(" + pNAMES + ")" + pSTMT
+    pPROD.setParseAction(lambda result: (result[1], EFunction(result[3],mkFunBody(result[3], result[5]))))
+
     pDECL_VAR = "var" + pNAME + "=" + pEXPR + ";"
     pDECL_VAR.setParseAction(lambda result: (result[1],result[3]))
 
     # hack to get pDECL to match only PDECL_VAR (but still leave room
     # to add to pDECL later)
-    pDECL = ( pDECL_VAR | NoMatch() )
+    pDECL = ( pDECL_VAR | pPROD | NoMatch() )
 
     pDECLS = ZeroOrMore(pDECL)
     pDECLS.setParseAction(lambda result: [result])
 
     pDECL_OPT = Optional(pDECL)
     pDECL_OPT.setParseAction(lambda result: [result])
-
-    pSTMT = Forward()
 
     pSTMT_IF_1 = "if" + pEXPR + pSTMT + "else" + pSTMT
     pSTMT_IF_1.setParseAction(lambda result: EIf(result[1],result[2],result[4]))
@@ -467,6 +470,9 @@ def parse_imp (input):
     pFOR = Keyword("for") + "(" + pDECL_OPT + pEXPR + ";" + pSTMT_UPDATE + ")" + pSTMT
     pFOR.setParseAction(lambda result: EFor(result[2], result[3], result[5], result[7]))
 
+    pPROD_CALL = pEXPR + "(" + pEXPRS + ")" + Keyword(";")
+    pPROD_CALL.setParseAction(lambda result: ECall(result[0], result[2]))
+
     pSTMTS = ZeroOrMore(pSTMT)
     pSTMTS.setParseAction(lambda result: [result])
 
@@ -477,7 +483,7 @@ def parse_imp (input):
     pSTMT_BLOCK = "{" + pDECLS + pSTMTS + "}"
     pSTMT_BLOCK.setParseAction(lambda result: mkBlock(result[1],result[2]))
 
-    pSTMT << ( pSTMT_IF_1 | pSTMT_IF_2 | pSTMT_WHILE | pSTMT_PRINT | pSTMT_UPDATE |  pSTMT_BLOCK | pFOR)
+    pSTMT << ( pSTMT_IF_1 | pSTMT_IF_2 | pSTMT_WHILE | pSTMT_PRINT | pSTMT_UPDATE |  pSTMT_BLOCK | pFOR | pPROD_CALL)
 
     # can't attach a parse action to pSTMT because of recursion, so let's duplicate the parser
     pTOP_STMT = pSTMT.copy()
