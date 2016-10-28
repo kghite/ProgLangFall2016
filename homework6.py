@@ -200,6 +200,39 @@ class EFor (Exp):
         e = EWhile(self._cond, EDo([self._stat, self._incr]))
         e.eval(env)
         return VNone()
+
+class EArray (Exp):
+
+    def __init__ (self, exp):
+        self._exp = exp
+
+    def __str__ (self):
+        return "EArray({})".format(self._exp)
+
+    def eval(self, env):
+        v = self._exp.eval(env)
+
+        if(v.type != "integer"):
+            raise Exception ("Cannot create an array of non-integer length")
+
+        return VArray(v.value, env)
+
+class EWith (Exp):
+
+    def __init__ (self, ref, exp):
+        self._ref = ref
+        self._exp = exp
+
+    def __str__ (self):
+        return "EWith({}, {})".format(self._ref, self._exp)
+
+    def eval(self, env):
+        obj = self._ref.eval(env).content
+
+        if(obj.type != "array"):
+            raise Exception ("Cannot apply operation to a non-array")
+
+        return self._exp.eval(obj.env + env)
 #
 # Values
 #
@@ -288,12 +321,33 @@ class VString (Value):
         if(compare.type != "string"):
             raise Exception("Value Error: Cannot compare string with " + compare.type)
         return VBoolean(self.value.endswith(compare.value))
-        
+
     def lower(self):
         return VString(self.value.lower())
 
     def upper(self):
         return VString(self.value.upper())
+
+class VArray(Value):
+
+    def __init__(self, initial_size, env, array=None):
+        self.type = "array"
+        if(array is not None):
+            self.value = array
+        else:
+            self.value = [VNone()] * initial_size
+
+        self._methods = []
+        self._methods.insert(0, ("index", EFunction("i", EPrimCall(oper_index, [EId("self"), EId("i")]))))
+        self._methods.insert(0, ("length", EFunction([], EPrimCall(oper_length, [EId("self")]))))
+        self._methods.insert(0, ("map", EFunction("f", EPrimCall(oper_map, [EId("self"), EId("f")]))))
+
+        self.env = []
+        self.env.insert(0, ("self", VRefCell(self)))
+        self.env += [(id, VRefCell(e.eval(self.env + env))) for (id, e) in self._methods]
+
+    def __str__(self):
+        return "<array {}>".format([str(val) for val in self.value])
 
 
 # Primitive operations
@@ -333,7 +387,31 @@ def oper_print (v1):
     print v1
     return VNone()
 
-    
+def oper_update_array(v1, i, v2):
+    if v1.type == "ref" and v1.content.type == "array":
+        if(i.type == "integer"):
+            if(i.value < len(v1.content.value) and i.value >= 0):
+                v1.content.value[i.value] = v2
+                return VNone()
+            raise Exception ("Runtime error: invalid array index")
+        raise Exception("Runtime error: not a valid index")
+    raise Exception ("Runtime error: updating a non-reference value or updating non-array")
+
+def oper_index(obj, index):
+    if(obj.content.type == "array" and index.type == "integer"):
+        if(index.value < len(obj.content.value) and index.value >= 0):
+            return obj.content.value[index.value]
+        raise Exception ("Array index out of bounds")
+    raise Exception ("Trying to find index of non-array")
+
+def oper_length(obj):
+    if(obj.content.type == "array"):
+        return VInteger(len(obj.content.value))
+
+def oper_map(obj, func):
+    if(obj.content.type == "array" and func.type == "function"):
+        init_array = [func.body.eval(zip(func.params,[val]) + func.env) for val in obj.content.value]
+        return VArray(VInteger(len(init_array)), obj.content.env, init_array)
 
 
 ############################################################
@@ -374,6 +452,7 @@ def initial_env_imp ():
                 VRefCell(VClosure(["x"],
                                   EPrimCall(oper_zero,[EId("x")]),
                                   env))))
+
     return env
 
 
@@ -458,7 +537,13 @@ def parse_imp (input):
     pCALL = "(" + pEXPR + pEXPRS + ")"
     pCALL.setParseAction(lambda result: ECall(result[1],result[2]))
 
-    pEXPR << (pINTEGER | pBOOLEAN | pSTRING | pIDENTIFIER | pIF | pFUN | pCALL)
+    pARRAY = "(" + Keyword("new-array") + pEXPR + ")"
+    pARRAY.setParseAction(lambda result: EArray(result[2]))
+
+    pWITH = "(" + Keyword("with") + pNAME + pEXPR + ")"
+    pWITH.setParseAction(lambda result: EWith(EId(result[2]), result[3]))
+
+    pEXPR << (pINTEGER | pBOOLEAN | pSTRING | pIDENTIFIER | pWITH | pIF | pFUN | pARRAY | pCALL)
 
     pSTMT = Forward()
 
@@ -493,6 +578,9 @@ def parse_imp (input):
     pSTMT_UPDATE = pNAME + "<-" + pEXPR + ";"
     pSTMT_UPDATE.setParseAction(lambda result: EPrimCall(oper_update,[EId(result[0]),result[2]]))
 
+    pSTMT_UPDATE_ARRAY = pNAME + "[" + pEXPR + "]" + Keyword("<-") + pEXPR + ";"
+    pSTMT_UPDATE_ARRAY.setParseAction(lambda result: EPrimCall(oper_update_array, [EId(result[0]), result[2], result[5]]))
+
     pFOR = Keyword("for") + "(" + pDECL_OPT + pEXPR + ";" + pSTMT_UPDATE + ")" + pSTMT
     pFOR.setParseAction(lambda result: EFor(result[2], result[3], result[5], result[7]))
 
@@ -509,7 +597,7 @@ def parse_imp (input):
     pSTMT_BLOCK = "{" + pDECLS + pSTMTS + "}"
     pSTMT_BLOCK.setParseAction(lambda result: mkBlock(result[1],result[2]))
 
-    pSTMT << ( pSTMT_IF_1 | pSTMT_IF_2 | pSTMT_WHILE | pSTMT_PRINT | pSTMT_UPDATE |  pSTMT_BLOCK | pFOR | pPROD_CALL)
+    pSTMT << ( pSTMT_IF_1 | pSTMT_IF_2 | pSTMT_WHILE | pSTMT_PRINT | pSTMT_UPDATE | pSTMT_UPDATE_ARRAY | pSTMT_BLOCK | pFOR | pPROD_CALL)
 
     # can't attach a parse action to pSTMT because of recursion, so let's duplicate the parser
     pTOP_STMT = pSTMT.copy()
