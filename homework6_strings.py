@@ -279,6 +279,9 @@ class VString (Value):
             raise Exception ("End index must be larger than begin index")
         return VString(self.value[begin:end])
 
+    def concat(self, add):
+        return VString(self.value + add)
+
     def startswith(self, compare):
         if(compare.type != "string"):
             raise Exception("Value Error: Cannot compare string with " + compare.type)
@@ -332,6 +335,48 @@ def oper_update (v1,v2):
 def oper_print (v1):
     print v1
     return VNone()
+
+def oper_length(v1):
+    if v1.type != "string":
+        raise Exception("Runtime error: attempting string operation on non-string")
+    print v1.length()
+    return v1.length()
+
+def oper_substring(v1, begin, end):
+    if v1.type != "string":
+        raise Exception("Runtime error: attempting string operation on non-string")
+    print v1.substring(begin, end)
+    return v1.substring(begin, end)
+
+def oper_concat(v1, add):
+    if v1.type != "string":
+        raise Exception("Runtime error: attempting string operation on non-string")
+    print v1.concat(add)
+    return v1.concat(add)
+
+def oper_startswith(v1, compare):
+    if v1.type != "string":
+        raise Exception("Runtime error: attempting string operation on non-string")
+    print v1.startswith(compare)
+    return v1.startswith(compare)
+
+def oper_endswith(v1, compare):
+    if v1.type != "string":
+        raise Exception("Runtime error: attempting string operation on non-string")
+    print v1.endswith(compare)
+    return v1.endswith(compare)
+
+def oper_lower(v1):
+    if v1.type != "string":
+        raise Exception("Runtime error: attempting string operation on non-string")
+    print v1.lower()
+    return v1.lower()
+
+def oper_upper(v1):
+    if v1.type != "string":
+        raise Exception("Runtime error: attempting string operation on non-string")
+    print v1.upper()
+    return v1.upper()
 
     
 
@@ -512,8 +557,8 @@ def parse_imp (input):
     pSTRING_OPERS = Keyword("length") | Keyword("substring") | Keyword("concat") | Keyword("startswith") | Keyword("endswith") | Keyword("lower") | Keyword("upper")
     pSTRING_OPERS.setParseAction(lambda result: result)
 
-    pSTRING_OPER = pSTRING_OPERS + pEXPR + ";"
-    pSTRING_OPER.setParseAction(lambda result: string_operation(result[0], result[1]))
+    pSTRING_OPER = pSTRING_OPERS + pEXPR + Optional(pEXPR) + Optional(pEXPR) + ";"
+    pSTRING_OPER.setParseAction(lambda result: string_operation(result[0], result[1], result[2], result[3]))
 
     pSTMT << ( pSTMT_IF_1 | pSTMT_IF_2 | pSTMT_WHILE | pSTMT_PRINT | pSTMT_UPDATE |  pSTMT_BLOCK | pFOR | pPROD_CALL | pSTRING_OPER)
 
@@ -542,24 +587,22 @@ def printR(result):
     #print result
     return result[0]
 
-def string_operation(operation, str_value):
-    print str_value
-    if str_value.type != "string":
-        raise Exception ("Runtime error: attempting string operaiton on non-string")
-    elif operation == "length":
-        return str_value.length()
+def string_operation(operation, str_value, opt1, opt2):
+    if operation == "length":
+        return EPrimCall(oper_length, [str_value])
     elif operation == "substring":
-        return str_value.substring()
+        return EPrimCall(oper_substring, [str_value], opt1, opt2)
     elif operation == "concat":
-        return str_value.concat()
+        return EPrimCall(oper_concat, [str_value], opt1)
     elif operation == "startswith":
-        return str_value.startswith()
+        return EPrimCall(oper_startswith, [str_value], opt1)
     elif operation == "endswith":
-        return str_value.endswith()
+        return EPrimCall(oper_endswith, [str_value], opt1)
     elif operation == "lower":
-        return str_value.lower()
+        return EPrimCall(oper_lower, [str_value])
     elif operation == "upper":
-        return str_value.upper()
+        return EPrimCall(oper_upper, [str_value])
+
 
 def shell_imp ():
     # A simple shell
