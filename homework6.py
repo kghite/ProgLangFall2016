@@ -263,11 +263,37 @@ class VNone (Value):
 class VString (Value):
 
     def __init__(self, val):
-        self.content = val
+        self.value = val
         self.type = "string"
 
     def __str__ (self):
-        return "<string {}>".format(self.content)
+        return "<string {}>".format(self.value)
+
+    def length(self):
+        return VInteger(len(self.value))
+
+    def substring(self, begin, end):
+        if(end > len(self.value) or begin < 0):
+            raise Exception ("String slicing exception: Substring indices out of bounds")
+        if(end < begin):
+            raise Exception ("End index must be larger than begin index")
+        return VString(self.value[begin:end])
+
+    def startswith(self, compare):
+        if(compare.type != "string"):
+            raise Exception("Value Error: Cannot compare string with " + compare.type)
+        return VBoolean(self.value.startswith(compare.value))
+
+    def endswith(self, compare):
+        if(compare.type != "string"):
+            raise Exception("Value Error: Cannot compare string with " + compare.type)
+        return VBoolean(self.value.endswith(compare.value))
+        
+    def lower(self):
+        return VString(self.value.lower())
+
+    def upper(self):
+        return VString(self.value.upper())
 
 
 # Primitive operations
@@ -470,7 +496,7 @@ def parse_imp (input):
     pFOR = Keyword("for") + "(" + pDECL_OPT + pEXPR + ";" + pSTMT_UPDATE + ")" + pSTMT
     pFOR.setParseAction(lambda result: EFor(result[2], result[3], result[5], result[7]))
 
-    pPROD_CALL = pEXPR + "(" + pEXPRS + ")" + Keyword(";")
+    pPROD_CALL = pNAME + "(" + pEXPRS + ")" + Keyword(";")
     pPROD_CALL.setParseAction(lambda result: ECall(result[0], result[2]))
 
     pSTMTS = ZeroOrMore(pSTMT)
