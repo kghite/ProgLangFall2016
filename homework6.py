@@ -378,6 +378,30 @@ def oper_zero (v1):
         return VBoolean(v1.value==0)
     raise Exception ("Runtime error: type error in zero?")
 
+def oper_lessthan (v1, v2):
+    if v1.type == "integer" and v2.type == "integer":
+        if v1.value < v2.value:
+            return VBoolean(True)
+        else:
+            return VBoolean(False)
+    raise Exception("Runtime error: trying to compare non-integers")
+
+def oper_greaterthan (v1, v2):
+    if v1.type == "integer" and v2.type == "integer":
+        if v1.value > v2.value:
+            return VBoolean(True)
+        else:
+            return VBoolean(False)
+    raise Exception("Runtime error: trying to compare non-integers")
+
+def oper_equalto (v1, v2):
+    if v1.type == "integer" and v2.type == "integer":
+        if v1.value == v2.value:
+            return VBoolean(True)
+        else:
+            return VBoolean(False)
+    raise Exception("Runtime error: trying to compare non-integers")
+
 def oper_deref (v1):
     if v1.type == "ref":
         return v1.content
@@ -419,7 +443,7 @@ def oper_map(obj, func):
         init_array = [func.body.eval(zip(func.params,[val]) + func.env) for val in obj.content.value]
         return VArray(VInteger(len(init_array)), obj.content.env, init_array)
 
-def oper_length(v1):
+def oper_str_length(v1):
     if v1.type != "string":
         raise Exception("Runtime error: attempting string operation on non-string")
     print v1.length()
@@ -500,6 +524,21 @@ def initial_env_imp ():
                 VRefCell(VClosure(["x"],
                                   EPrimCall(oper_zero,[EId("x")]),
                                   env))))
+    env.insert(0,
+                "<",
+                VRefCell(VClosure(["x","y"],
+                                  EPrimCall(oper_lessthan,[EId("x"),EId("y")]),
+                                  env)))
+    env.insert(0,
+                ">",
+                VRefCell(VClosure(["x","y"],
+                                  EPrimCall(oper_greaterthan,[EId("x"),EId("y")]),
+                                  env)))
+    env.insert(0,
+                "=",
+                VRefCell(VClosure(["x","y"],
+                                  EPrimCall(oper_equalto,[EId("x"),EId("y")]),
+                                  env)))
 
     return env
 
@@ -645,7 +684,7 @@ def parse_imp (input):
     pSTMT_BLOCK = "{" + pDECLS + pSTMTS + "}"
     pSTMT_BLOCK.setParseAction(lambda result: mkBlock(result[1],result[2]))
 
-    pSTRING_OPERS = Keyword("length") | Keyword("substring") | Keyword("concat") | Keyword("startswith") | Keyword("endswith") | Keyword("lower") | Keyword("upper")
+    pSTRING_OPERS = Keyword("len") | Keyword("substring") | Keyword("concat") | Keyword("startswith") | Keyword("endswith") | Keyword("lower") | Keyword("upper")
     pSTRING_OPERS.setParseAction(lambda result: result)
 
     pSTRING_OPER = pSTRING_OPERS + pEXPR + pEXPRS + ";"
@@ -682,8 +721,8 @@ def string_operation(operation, name, exprs):
     prim_args = [name]
     prim_args.extend(exprs)
 
-    if operation == "length":
-        return EPrimCall(oper_length, [name])
+    if operation == "len":
+        return EPrimCall(oper_str_length, [name])
     elif operation == "substring":
         print prim_args
         return EPrimCall(oper_substring, prim_args)
