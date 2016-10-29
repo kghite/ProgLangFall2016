@@ -273,14 +273,17 @@ class VString (Value):
         return VInteger(len(self.value))
 
     def substring(self, begin, end):
-        if(end > len(self.value) or begin < 0):
+        if (end > len(self.value) or begin < 0):
+            print begin
+            print end
+            print len(self.value)
             raise Exception ("String slicing exception: Substring indices out of bounds")
-        if(end < begin):
+        if (end < begin):
             raise Exception ("End index must be larger than begin index")
         return VString(self.value[begin:end])
 
     def concat(self, add):
-        return VString(self.value + add)
+        return VString(self.value + add.value)
 
     def startswith(self, compare):
         if(compare.type != "string"):
@@ -557,10 +560,10 @@ def parse_imp (input):
     pSTRING_OPERS = Keyword("length") | Keyword("substring") | Keyword("concat") | Keyword("startswith") | Keyword("endswith") | Keyword("lower") | Keyword("upper")
     pSTRING_OPERS.setParseAction(lambda result: result)
 
-    pSTRING_OPER = pSTRING_OPERS + pEXPR + Optional(pEXPR) + Optional(pEXPR) + ";"
-    pSTRING_OPER.setParseAction(lambda result: string_operation(result[0], result[1], result[2], result[3]))
+    pSTRING_OPER = pSTRING_OPERS + pEXPR + pEXPRS + ";"
+    pSTRING_OPER.setParseAction(lambda result: string_operation(result[0], result[1], result[2]))
 
-    pSTMT << ( pSTMT_IF_1 | pSTMT_IF_2 | pSTMT_WHILE | pSTMT_PRINT | pSTMT_UPDATE |  pSTMT_BLOCK | pFOR | pPROD_CALL | pSTRING_OPER)
+    pSTMT << (pSTRING_OPER | pSTMT_IF_1 | pSTMT_IF_2 | pSTMT_WHILE | pSTMT_PRINT | pSTMT_UPDATE |  pSTMT_BLOCK | pFOR | pPROD_CALL)
 
     # can't attach a parse action to pSTMT because of recursion, so let's duplicate the parser
     pTOP_STMT = pSTMT.copy()
@@ -587,21 +590,24 @@ def printR(result):
     #print result
     return result[0]
 
-def string_operation(operation, str_value, opt1, opt2):
+def string_operation(operation, name, exprs):
+    prim_args = [name]
+    prim_args.extend(exprs)
+
     if operation == "length":
-        return EPrimCall(oper_length, [str_value])
+        return EPrimCall(oper_length, [name])
     elif operation == "substring":
-        return EPrimCall(oper_substring, [str_value], opt1, opt2)
+        return EPrimCall(oper_substring, prim_args)
     elif operation == "concat":
-        return EPrimCall(oper_concat, [str_value], opt1)
+        return EPrimCall(oper_concat, prim_args)
     elif operation == "startswith":
-        return EPrimCall(oper_startswith, [str_value], opt1)
+        return EPrimCall(oper_startswith, prim_args)
     elif operation == "endswith":
-        return EPrimCall(oper_endswith, [str_value], opt1)
+        return EPrimCall(oper_endswith, prim_args)
     elif operation == "lower":
-        return EPrimCall(oper_lower, [str_value])
+        return EPrimCall(oper_lower, [name])
     elif operation == "upper":
-        return EPrimCall(oper_upper, [str_value])
+        return EPrimCall(oper_upper, [name])
 
 
 def shell_imp ():
