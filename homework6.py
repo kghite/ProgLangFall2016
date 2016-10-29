@@ -300,17 +300,23 @@ class VString (Value):
         self.type = "string"
 
     def __str__ (self):
-        return "<string {}>".format(self.value)
+        return self.value
 
     def length(self):
         return VInteger(len(self.value))
 
     def substring(self, begin, end):
-        if(end > len(self.value) or begin < 0):
+        if (end > len(self.value)-1 or begin < 0):
+            print begin
+            print end
+            print len(self.value)
             raise Exception ("String slicing exception: Substring indices out of bounds")
-        if(end < begin):
+        if (end < begin):
             raise Exception ("End index must be larger than begin index")
         return VString(self.value[begin:end])
+
+    def concat(self, add):
+        return VString(self.value + add.value)
 
     def startswith(self, compare):
         if(compare.type != "string"):
@@ -321,7 +327,7 @@ class VString (Value):
         if(compare.type != "string"):
             raise Exception("Value Error: Cannot compare string with " + compare.type)
         return VBoolean(self.value.endswith(compare.value))
-
+        
     def lower(self):
         return VString(self.value.lower())
 
@@ -412,6 +418,48 @@ def oper_map(obj, func):
     if(obj.content.type == "array" and func.type == "function"):
         init_array = [func.body.eval(zip(func.params,[val]) + func.env) for val in obj.content.value]
         return VArray(VInteger(len(init_array)), obj.content.env, init_array)
+
+def oper_length(v1):
+    if v1.type != "string":
+        raise Exception("Runtime error: attempting string operation on non-string")
+    print v1.length()
+    return v1.length()
+
+def oper_substring(v1, begin, end):
+    if v1.type != "string":
+        raise Exception("Runtime error: attempting string operation on non-string")
+    print v1.substring(begin, end)
+    return v1.substring(begin, end)
+
+def oper_concat(v1, add):
+    if v1.type != "string":
+        raise Exception("Runtime error: attempting string operation on non-string")
+    print v1.concat(add)
+    return v1.concat(add)
+
+def oper_startswith(v1, compare):
+    if v1.type != "string":
+        raise Exception("Runtime error: attempting string operation on non-string")
+    print v1.startswith(compare)
+    return v1.startswith(compare)
+
+def oper_endswith(v1, compare):
+    if v1.type != "string":
+        raise Exception("Runtime error: attempting string operation on non-string")
+    print v1.endswith(compare)
+    return v1.endswith(compare)
+
+def oper_lower(v1):
+    if v1.type != "string":
+        raise Exception("Runtime error: attempting string operation on non-string")
+    print v1.lower()
+    return v1.lower()
+
+def oper_upper(v1):
+    if v1.type != "string":
+        raise Exception("Runtime error: attempting string operation on non-string")
+    print v1.upper()
+    return v1.upper()
 
 
 ############################################################
@@ -597,7 +645,13 @@ def parse_imp (input):
     pSTMT_BLOCK = "{" + pDECLS + pSTMTS + "}"
     pSTMT_BLOCK.setParseAction(lambda result: mkBlock(result[1],result[2]))
 
-    pSTMT << ( pSTMT_IF_1 | pSTMT_IF_2 | pSTMT_WHILE | pSTMT_PRINT | pSTMT_UPDATE | pSTMT_UPDATE_ARRAY | pSTMT_BLOCK | pFOR | pPROD_CALL)
+    pSTRING_OPERS = Keyword("length") | Keyword("substring") | Keyword("concat") | Keyword("startswith") | Keyword("endswith") | Keyword("lower") | Keyword("upper")
+    pSTRING_OPERS.setParseAction(lambda result: result)
+
+    pSTRING_OPER = pSTRING_OPERS + pEXPR + pEXPRS + ";"
+    pSTRING_OPER.setParseAction(lambda result: string_operation(result[0], result[1], result[2]))
+
+    pSTMT << ( pSTRING_OPER | pSTMT_IF_1 | pSTMT_IF_2 | pSTMT_WHILE | pSTMT_PRINT | pSTMT_UPDATE | pSTMT_UPDATE_ARRAY | pSTMT_BLOCK | pFOR | pPROD_CALL)
 
     # can't attach a parse action to pSTMT because of recursion, so let's duplicate the parser
     pTOP_STMT = pSTMT.copy()
@@ -621,8 +675,28 @@ def parse_imp (input):
     return result    # the first element of the result is the expression
 
 def printR(result):
-    print result
+    #print result
     return result[0]
+
+def string_operation(operation, name, exprs):
+    prim_args = [name]
+    prim_args.extend(exprs)
+
+    if operation == "length":
+        return EPrimCall(oper_length, [name])
+    elif operation == "substring":
+        print prim_args
+        return EPrimCall(oper_substring, prim_args)
+    elif operation == "concat":
+        return EPrimCall(oper_concat, prim_args)
+    elif operation == "startswith":
+        return EPrimCall(oper_startswith, prim_args)
+    elif operation == "endswith":
+        return EPrimCall(oper_endswith, prim_args)
+    elif operation == "lower":
+        return EPrimCall(oper_lower, [name])
+    elif operation == "upper":
+        return EPrimCall(oper_upper, [name])
 
 def shell_imp ():
     # A simple shell
