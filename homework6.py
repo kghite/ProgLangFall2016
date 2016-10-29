@@ -525,20 +525,20 @@ def initial_env_imp ():
                                   EPrimCall(oper_zero,[EId("x")]),
                                   env))))
     env.insert(0,
-                "<",
+                ("<",
                 VRefCell(VClosure(["x","y"],
                                   EPrimCall(oper_lessthan,[EId("x"),EId("y")]),
-                                  env)))
+                                  env))))
     env.insert(0,
-                ">",
+                (">",
                 VRefCell(VClosure(["x","y"],
                                   EPrimCall(oper_greaterthan,[EId("x"),EId("y")]),
-                                  env)))
+                                  env))))
     env.insert(0,
-                "=",
+                ("=",
                 VRefCell(VClosure(["x","y"],
                                   EPrimCall(oper_equalto,[EId("x"),EId("y")]),
-                                  env)))
+                                  env))))
 
     return env
 
