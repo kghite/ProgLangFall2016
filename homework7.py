@@ -99,7 +99,6 @@ class ECall (Exp):
         return "ECall({},{})".format(str(self._fun),str([str(exp) for exp in self._exps]))
 
     def eval (self,env):
-        print self._fun
         f = self._fun.eval(env)
         if f.type != "function":
             raise Exception("Runtime error: trying to call a non-function")
@@ -124,7 +123,29 @@ class EFunction (Exp):
             n_closure.env.insert(0, tuple([self._func_name, n_closure]))
         return n_closure
 
-    
+class EArray (Exp):
+
+    def __init__ (self, array):
+        self._array = array
+
+    def __str__ (self):
+        return "EArray({})".format(self._array)
+
+    def eval(self, env):
+        vals = [v.eval(env) for v in self._array]
+        return VArray(vals, env)
+
+class ERecord (Exp):
+
+    def __init__(self, record):
+        self._record = record
+
+    def __str__(self):
+        return "ERecord({})".format(self._record)
+
+    def eval(self, env):
+        dic = {key:val.eval(env) for key, val in self._record}
+        return VRecord(dic)
 #
 # Values
 #
@@ -166,8 +187,32 @@ class VClosure (Value):
     def __str__ (self):
         return "<function [{}] {}>".format(self.params,str(self.body))
 
+class VArray(Value):
 
+    def __init__(self, array, env):
+        self.type = "array"
+        self.value = array
 
+        self._methods = []
+        self._methods.insert(0, ("index", EFunction("i", EPrimCall(oper_index, [EId("self"), EId("i")]))))
+        self._methods.insert(0, ("length", EFunction([], EPrimCall(oper_length, [EId("self")]))))
+        self._methods.insert(0, ("map", EFunction("f", EPrimCall(oper_map, [EId("self"), EId("f")]))))
+
+        self.env = []
+        self.env.insert(0, ("self", self))
+        self.env += [(id, e.eval(self.env + env)) for (id, e) in self._methods]
+
+    def __str__(self):
+        return "<array {}>".format([str(val) for val in self.value])
+
+class VRecord(Value):
+
+    def __init__(self, record):
+        self.type = "record"
+        self.value = record
+
+    def __str__(self):
+        return "<record {}>".format([str(key) + " : " + str(self.value[key]) for key in self.value])
 # Primitive operations
 
 # Primitive operations
@@ -234,6 +279,22 @@ def oper_zero (v1):
     if v1.type == "integer":
         return VBoolean(v1.value==0)
     raise Exception ("Runtime error: type error in zero?")
+
+def oper_index(obj, index):
+    if(obj.content.type == "array" and index.type == "integer"):
+        if(index.value < len(obj.content.value) and index.value >= 0):
+            return obj.content.value[index.value]
+        raise Exception ("Array index out of bounds")
+    raise Exception ("Trying to find index of non-array")
+
+def oper_length(obj):
+    if(obj.content.type == "array"):
+        return VInteger(len(obj.content.value))
+
+def oper_map(obj, func):
+    if(obj.content.type == "array" and func.type == "function"):
+        init_array = [func.body.eval(zip(func.params,[val]) + func.env) for val in obj.content.value]
+        return VArray(VInteger(len(init_array)), obj.content.env, init_array)
 
 
 # this initial environment works with Q1 when you've completed it
@@ -317,7 +378,7 @@ def initial_env ():
 ##
 # cf http://pyparsing.wikispaces.com/
 
-from pyparsing import Word, Literal, ZeroOrMore, OneOrMore, Keyword, Forward, alphas, alphanums, Optional
+from pyparsing import Word, Literal, ZeroOrMore, OneOrMore, Keyword, Forward, alphas, alphanums, Optional, MatchFirst, delimitedList
 
 
 def letUnimplementedError ():
@@ -344,10 +405,11 @@ def parse_natural (input):
     # <expr-seq> ::= <expr> , <expr-seq>
     #              <expr>    
 
+    RESERVE_WORDS = ["let"]
 
     idChars = alphas+"_+*-?!=<>"
 
-    pIDENTIFIER = Word(idChars, idChars+"0123456789")
+    pIDENTIFIER = ~MatchFirst(map(Keyword, RESERVE_WORDS)) + Word(idChars, idChars+"0123456789")
     pIDENTIFIER.setParseAction(lambda result: EId(str(result[0])))
 
     # A name is like an identifier but it does not return an EId...
@@ -361,46 +423,53 @@ def parse_natural (input):
 
     pBASICEXPR = Forward()
     pEXPROPR = Forward()
+    pBODY = Forward()
     pEXPR = Forward()
 
-    pBINDING = pIDENTIFIER + Keyword("=") + pBASICEXPR + Optional(",")
-    pBINDING.setParseAction(lambda result: (result[1], result[3]))
+    pBINDING = pNAME + Keyword("=") + pBASICEXPR
+    pBINDING.setParseAction(lambda result: (result[0], result[2]))
 
-    pBINDINGS = OneOrMore(pBINDING) 
-    pBINDINGS.setParseAction(lambda result: result)
+    pBINDINGS = delimitedList(pBINDING) 
+    pBINDINGS.setParseAction(lambda result: [result])
 
     pBASICEXPR << (pINTEGER + pEXPROPR | pBOOLEAN + pEXPROPR  | pINTEGER | pBOOLEAN | pIDENTIFIER + pEXPROPR | pIDENTIFIER)
     pBASICEXPR.setParseAction(append_left)
 
-    pEXPRSEQ = OneOrMore(pBASICEXPR)
-    pEXPRSEQ.setParseAction(lambda result: result)
+    pEXPRSEQ = delimitedList(pBASICEXPR)
+    pEXPRSEQ.setParseAction(lambda result: [result])
+
+    pENTRY = pNAME + ":" + pBASICEXPR
+    pENTRY.setParseAction(lambda result: (result[0], result[2]))
+
+    pENTRY_LIST = delimitedList(pENTRY)
+    pENTRY_LIST.setParseAction(lambda result: [result])
 
     pADD = Keyword("+") + pBASICEXPR
-    pADD.setParseAction(lambda result: EPrimCall("+", [result[1]]))
+    pADD.setParseAction(lambda result: EPrimCall(oper_plus, [result[1]]))
 
     pTIMES  = Keyword("*") + pBASICEXPR
-    pTIMES.setParseAction(lambda result: EPrimCall("*", [result[1]]))
+    pTIMES.setParseAction(lambda result: EPrimCall(oper_times, [result[1]]))
 
     pMINUS  = Keyword("-") + pBASICEXPR
-    pMINUS.setParseAction(lambda result: EPrimCall("-", [result[1]]))
+    pMINUS.setParseAction(lambda result: EPrimCall(oper_minus, [result[1]]))
 
     pEQUALS = Keyword("==") + pBASICEXPR
-    pEQUALS.setParseAction(lambda result: EPrimCall("==", [result[1]]))
+    pEQUALS.setParseAction(lambda result: EPrimCall(oper_equal, [result[1]]))
 
     pNOT_EQUALS = Keyword("<>") + pBASICEXPR
-    pNOT_EQUALS.setParseAction(lambda result: EPrimCall("<>", [result[1]]))
+    pNOT_EQUALS.setParseAction(lambda result: EPrimCall(oper_not_equal, [result[1]]))
 
     pLESS_THAN = Keyword("<") + pBASICEXPR
-    pLESS_THAN.setParseAction(lambda result: EPrimCall("<", [result[1]]))
+    pLESS_THAN.setParseAction(lambda result: EPrimCall(oper_less_than, [result[1]]))
 
     pLESS_THAN_EQUALS = Keyword("<=") + pBASICEXPR
-    pLESS_THAN_EQUALS.setParseAction(lambda result: EPrimCall("<=", [result[1]]))
+    pLESS_THAN_EQUALS.setParseAction(lambda result: EPrimCall(oper_less_or_equal, [result[1]]))
 
     pGREATER_THAN = Keyword(">") + pBASICEXPR
-    pGREATER_THAN.setParseAction(lambda result: EPrimCall(">", [result[1]]))
+    pGREATER_THAN.setParseAction(lambda result: EPrimCall(oper_greater_than, [result[1]]))
 
     pGREATER_THAN_EQUALS = Keyword(">=") + pBASICEXPR
-    pGREATER_THAN_EQUALS.setParseAction(lambda result: EPrimCall(">=", [result[1]]))
+    pGREATER_THAN_EQUALS.setParseAction(lambda result: EPrimCall(oper_greater_or_equal, [result[1]]))
 
     pAND = Keyword("and") + pBASICEXPR
     pAND.setParseAction(lambda result: EIf(None, result[1], EValue(VBoolean(False))))
@@ -412,17 +481,26 @@ def parse_natural (input):
     pIF.setParseAction(lambda result: EIf(None, result[1], result[3]))
 
     pLET = Keyword("let") + "(" + pBINDINGS + ")" + pBASICEXPR
-    pLET.setParseAction(lambda result: ECall(EFunction([b[0] for b in result[2]], result[5]), [b[1] for b in result[2]]))
+    pLET.setParseAction(lambda result: ECall(EFunction([b[0] for b in result[2]], result[4]), [b[1] for b in result[2]]))
 
-    pFUNC = pNAME + "(" + pEXPRSEQ + ")"
-    pFUNC.setParseAction(lambda result: ECall(result[0], result[2]))
+    pFUN = Keyword("fun") + "(" + delimitedList(pNAME) + ")" + pBODY
+    pFUN.setParseAction(lambda result: EFunction(result[2], result[4]))
+
+    pFUN_RECURS = Keyword("fun") + pNAME + "(" + delimitedList(pNAME) + ")" + pBODY
+    pFUN_RECURS.setParseAction(lambda result: EFunction(result[3], result[5], name=result[1]))
+
+    pARRAY = Keyword("[") + pEXPRSEQ + Keyword("]")
+    pARRAY.setParseAction(lambda result: EArray(result[1]))
+
+    pRECORD = Keyword("{") + pENTRY_LIST + Keyword("}")
+    pRECORD.setParseAction(lambda result: ERecord(result[1]))
 
     pNOT = Keyword("not") + pBASICEXPR
     pNOT.setParseAction(lambda result: EPrimCall("not", [result[1]]))
 
     pEXPROPR << (pTIMES | pADD | pMINUS | pIF | pEQUALS | pNOT_EQUALS | pLESS_THAN | pLESS_THAN_EQUALS | pGREATER_THAN | pGREATER_THAN_EQUALS)
 
-    pEXPR << (pLET | pNOT | pFUNC | pBASICEXPR)
+    pEXPR << (pLET | pNOT | pARRAY | pRECORD | pFUN | pFUN_RECURS | pBASICEXPR)
     result = pEXPR.parseString(input)[0]
     return result    # the first element of the result is the expression
 
