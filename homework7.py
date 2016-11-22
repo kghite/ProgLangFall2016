@@ -694,8 +694,8 @@ def parse_natural (input):
 
     pEXPROPR << (pTIMES | pADD | pMINUS | pIF | pEQUALS | pNOT_EQUALS | pLESS_THAN_EQUALS | pGREATER_THAN_EQUALS | pLESS_THAN | pGREATER_THAN)
 
-    pDECL_VAR = "var" + pNAME + "=" + pEXPR + ";"
-    pDECL_VAR.setParseAction(lambda result: (result[1],result[3]))
+    pDECL_VAR = pNAME + "=" + pEXPR + ";"
+    pDECL_VAR.setParseAction(lambda result: (result[0],result[2]))
 
     # hack to get pDECL to match only PDECL_VAR (but still leave room
     # to add to pDECL later)
@@ -717,10 +717,7 @@ def parse_natural (input):
     pSTMT_WHILE.setParseAction(lambda result: EWhile(result[1],result[2]))
 
     pSTMT_PRINT = "print" + pEXPR + ";"
-    pSTMT_PRINT.setParseAction(lambda result: EPrimCall(oper_print,[result[1]]));
-
-    pSTMT_UPDATE = pNAME + "=" + pEXPR + ";"
-    pSTMT_UPDATE.setParseAction(lambda result: EPrimCall(oper_update,[EId(result[0]),result[2]]))
+    pSTMT_PRINT.setParseAction(lambda result: EPrimCall(oper_print,[result[1]]))
 
     pSTMT_UPDATE_ARRAY = pNAME + "[" + pEXPR + "]" + Keyword("=") + pEXPR + ";"
     pSTMT_UPDATE_ARRAY.setParseAction(lambda result: EPrimCall(oper_update_array, [EId(result[0]), result[2], result[5]]))
@@ -728,8 +725,8 @@ def parse_natural (input):
     pSTMT_UPDATE_RECORD = pNAME + "{" + pNAME + "}" + Keyword("=") + pEXPR + ";"
     pSTMT_UPDATE_RECORD.setParseAction(lambda result: EPrimCall(oper_update_array, [EId(result[0]), EString(result[2]), result[5]]))
 
-    pFOR = Keyword("for") + "(" + pDECL_OPT + pEXPR + ";" + pSTMT_UPDATE + ")" + pSTMT
-    pFOR.setParseAction(lambda result: EFor(result[2], result[3], result[5], result[7]))
+    pFOR = Keyword("for") + "(" + pDECL_OPT + pEXPR + ";" + pDECL_VAR + ")" + pSTMT
+    pFOR.setParseAction(lambda result: EFor(result[2], result[3], EPrimCall(oper_update,[EId(result[5][0]),result[5][1]]), result[7]))
 
     pSTMTS = ZeroOrMore(pSTMT)
     pSTMTS.setParseAction(lambda result: [result])
@@ -741,7 +738,10 @@ def parse_natural (input):
     pSTMT_BLOCK << "{" + pDECLS + pSTMTS + "}"
     pSTMT_BLOCK.setParseAction(lambda result: mkBlock(result[1],result[2]))
 
-    pSTMT << ( pSTMT_IF_1 | pSTMT_IF_2 | pSTMT_WHILE | pSTMT_PRINT | pSTMT_UPDATE | pSTMT_UPDATE_RECORD | pSTMT_UPDATE_ARRAY | pSTMT_BLOCK | pFOR)
+    pSTMT_EXPR = pEXPR + ";"
+    pSTMT_EXPR.setParseAction(lambda result: EPrimCall(oper_print,[result[0]]))
+
+    pSTMT << ( pSTMT_IF_1 | pSTMT_IF_2 | pSTMT_WHILE | pSTMT_PRINT | pSTMT_UPDATE_RECORD | pSTMT_UPDATE_ARRAY | pSTMT_BLOCK | pFOR | pSTMT_EXPR)
 
     pEXPR << (pLET | pNOT | pARRAY | pRECORD | pFUN | pFUN_RECURS | pFUN_CALL | pBASICEXPR)
 
@@ -770,6 +770,18 @@ def append_left(result):
             result[1]._cond = result[0] 
             return result[1]
     return result[0]
+
+def update_environment(variable, env):
+    for i in range(len(env)):
+        if(env[i][0] == variable[0]):
+            del env[i]
+            env.insert(0, variable)
+            print variable[0] + " updated"
+            return env
+
+    print variable[0] + " defined"
+    env.insert(0,variable)
+    return env
 
 def shell ():
     # A simple shell
@@ -802,8 +814,10 @@ def shell ():
             elif result["result"] == "declaration":
                 (name,expr) = result["decl"]
                 v = expr.eval(env)
-                env.insert(0,(name,VRefCell(v)))
-                print "{} defined".format(name)
+
+                var = tuple([name, VRefCell(v)])
+
+                env = update_environment(var, env)
                 
                 
         except Exception as e:
