@@ -184,6 +184,44 @@ def oper_times (v1,v2):
         return VInteger(v1.value * v2.value)
     raise Exception ("Runtime error: trying to multiply non-numbers")
 
+def oper_equal (v1,v2):
+    if v1.type == v2.type:
+        return VBoolean(v1.value == v2.value)
+    raise Exception ("Runtime error: trying to compare value of different types")
+
+def oper_greater_than (v1,v2):
+    if v1.type == "integer" and v2.type == "integer":
+        return VBoolean(v1.value > v2.value)
+    if v1.type == "string" and v2.type == "string":
+        return VBoolean(v1.value > v2.value)
+    raise Exception ("Runtime error: trying to compare non-numbers")
+
+def oper_less_than (v1,v2):
+    if v1.type == "integer" and v2.type == "integer":
+        return VBoolean(v1.value < v2.value)
+    if v1.type == "string" and v2.type == "string":
+        return VBoolean(v1.value < v2.value)
+    raise Exception ("Runtime error: trying to compare non-numbers")
+
+def oper_greater_or_equal (v1,v2):
+    if v1.type == "integer" and v2.type == "integer":
+        return VBoolean(v1.value >= v2.value)
+    if v1.type == "string" and v2.type == "string":
+        return VBoolean(v1.value >= v2.value)
+    raise Exception ("Runtime error: trying to compare non-numbers")
+
+def oper_less_or_equal (v1,v2):
+    if v1.type == "integer" and v2.type == "integer":
+        return VBoolean(v1.value <= v2.value)
+    if v1.type == "string" and v2.type == "string":
+        return VBoolean(v1.value <= v2.value)
+    raise Exception ("Runtime error: trying to compare non-numbers")
+
+def oper_not_equal (v1,v2):
+    if v1.type == v2.type:
+        return VBoolean(v1.value != v2.value)
+    raise Exception ("Runtime error: trying to compare value of different types")
+
 def oper_zero (v1):
     if v1.type == "integer":
         return VBoolean(v1.value==0)
@@ -204,6 +242,41 @@ def initial_env ():
     env.insert(0,
         ("-",
          VClosure(["x","y"],EPrimCall(oper_minus,
+                                      [EId("x"),EId("y")]),
+                  env)))
+    env.insert(0,
+        ("*",
+         VClosure(["x","y"],EPrimCall(oper_times,
+                                      [EId("x"),EId("y")]),
+                  env)))
+    env.insert(0,
+        ("==",
+         VClosure(["x","y"],EPrimCall(oper_equal,
+                                      [EId("x"),EId("y")]),
+                  env)))
+    env.insert(0,
+        (">",
+         VClosure(["x","y"],EPrimCall(oper_greater_than,
+                                      [EId("x"),EId("y")]),
+                  env)))
+    env.insert(0,
+        ("<",
+         VClosure(["x","y"],EPrimCall(oper_less_than,
+                                      [EId("x"),EId("y")]),
+                  env)))
+    env.insert(0,
+        (">=",
+         VClosure(["x","y"],EPrimCall(oper_greater_or_equal,
+                                      [EId("x"),EId("y")]),
+                  env)))
+    env.insert(0,
+        ("<=",
+         VClosure(["x","y"],EPrimCall(oper_less_or_equal,
+                                      [EId("x"),EId("y")]),
+                  env)))
+    env.insert(0,
+        ("<>",
+         VClosure(["x","y"],EPrimCall(oper_not_equal,
                                       [EId("x"),EId("y")]),
                   env)))
     env.insert(0,
@@ -298,6 +371,8 @@ def parse (input):
 
     pCALL = "(" + pEXPR + pEXPRS + ")"
     pCALL.setParseAction(lambda result: ECall(result[1],result[2]))
+
+    pCOND = pEXPR + ""
 
     pFUN = "(" + Keyword("function") + "(" + pNAMES + ")" + pEXPR + ")"
     pFUN.setParseAction(lambda result: EFunction(result[3],result[5], name=""))

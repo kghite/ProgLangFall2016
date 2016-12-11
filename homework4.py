@@ -282,6 +282,44 @@ def oper_times (v1,v2):
         return VInteger(v1.value * v2.value)
     raise Exception ("Runtime error: trying to multiply non-numbers")
 
+def oper_equal (v1,v2):
+    if v1.type == v2.type:
+        return VBoolean(v1.value == v2.value)
+    raise Exception ("Runtime error: trying to compare value of different types")
+
+def oper_greater_than (v1,v2):
+    if v1.type == "integer" and v2.type == "integer":
+        return VBoolean(v1.value > v2.value)
+    if v1.type == "string" and v2.type == "string":
+        return VBoolean(v1.value > v2.value)
+    raise Exception ("Runtime error: trying to compare non-numbers")
+
+def oper_less_than (v1,v2):
+    if v1.type == "integer" and v2.type == "integer":
+        return VBoolean(v1.value < v2.value)
+    if v1.type == "string" and v2.type == "string":
+        return VBoolean(v1.value < v2.value)
+    raise Exception ("Runtime error: trying to compare non-numbers")
+
+def oper_greater_or_equal (v1,v2):
+    if v1.type == "integer" and v2.type == "integer":
+        return VBoolean(v1.value >= v2.value)
+    if v1.type == "string" and v2.type == "string":
+        return VBoolean(v1.value >= v2.value)
+    raise Exception ("Runtime error: trying to compare non-numbers")
+
+def oper_less_or_equal (v1,v2):
+    if v1.type == "integer" and v2.type == "integer":
+        return VBoolean(v1.value <= v2.value)
+    if v1.type == "string" and v2.type == "string":
+        return VBoolean(v1.value <= v2.value)
+    raise Exception ("Runtime error: trying to compare non-numbers")
+
+def oper_not_equal (v1,v2):
+    if v1.type == v2.type:
+        return VBoolean(v1.value != v2.value)
+    raise Exception ("Runtime error: trying to compare value of different types")
+
 def oper_zero (v1):
     if v1.type == "integer":
         return VBoolean(v1.value==0)
@@ -297,6 +335,18 @@ INITIAL_FUN_DICT = {
           "body":EPrimCall(oper_minus,[EId("x"),EId("y")])},
     "*": {"params":["x","y"],
           "body":EPrimCall(oper_times,[EId("x"),EId("y")])},
+    "==": {"params":["x","y"],
+          "body":EPrimCall(oper_equal,[EId("x"),EId("y")])},
+    ">": {"params":["x","y"],
+          "body":EPrimCall(oper_greater_than,[EId("x"),EId("y")])},
+    "<": {"params":["x","y"],
+          "body":EPrimCall(oper_less_than,[EId("x"),EId("y")])},
+    ">=": {"params":["x","y"],
+          "body":EPrimCall(oper_greater_or_equal,[EId("x"),EId("y")])},
+    "<=": {"params":["x","y"],
+          "body":EPrimCall(oper_less_or_equal,[EId("x"),EId("y")])},
+    "<>": {"params":["x","y"],
+          "body":EPrimCall(oper_not_equal,[EId("x"),EId("y")])},
     "zero?": {"params":["x"],
               "body":EPrimCall(oper_zero,[EId("x")])},
     "square": {"params":["x"],
@@ -373,11 +423,14 @@ def parse (input):
     pEXPRS = ZeroOrMore(pEXPR)
     pEXPRS.setParseAction(lambda result: [result])
 
-    pAND = "(" + Keyword("and") + pEXPRS + ")"
-    pAND.setParseAction(lambda result: handleAnd(result[2]))
+    pAND = pEXPR + Keyword("and") + pEXPR
+    pAND.setParseAction(lambda result: handleAnd(result[0], result[2]))
 
-    pOR = "(" + Keyword("or") + pEXPRS + ")"
-    pOR.setParseAction(lambda result: handleOr(result[2]))
+    pOR = pEXPR + Keyword("or") + pEXPR
+    pOR.setParseAction(lambda result: handleOr(result[0], result[2]))
+
+    pNOT = pEXPR + Keyword("not") + pEXPR
+    pNOT.setParseAction(lambda result: handleNot(result[0], result[2]))
 
     pCASE = "(" + pEXPR + pEXPR + ")"
     pCASE.setParseAction(lambda result: (result[1], result[2]))
@@ -409,10 +462,10 @@ def parse (input):
     return result    # the first element of the result is the expression
 
 
-def handleAnd(expr_list):
+def handleAnd(expr1, expr2):
     if(len(expr_list) == 0):
         return EBoolean(True)
-    elif(len(expr_list) == 1):
+    elif(expr1 == None and expr2 == None):
         return expr_list[0]
     else:
         expr = expr_list[0]

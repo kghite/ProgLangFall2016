@@ -1,9 +1,13 @@
+
 ############################################################
 # Simple imperative language
 # C-like surface syntac
 # with S-expression syntax for expressions
 # (no recursive closures)
 #
+
+# Andrew Deaver, Kathryn Hite
+# Andrew.Deaver@students.olin.edu, Kathryn.Hite@students.olin.edu
 
 import sys, os, traceback
 

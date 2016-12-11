@@ -694,8 +694,8 @@ def parse_natural (input):
 
     pEXPROPR << (pTIMES | pADD | pMINUS | pIF | pEQUALS | pNOT_EQUALS | pLESS_THAN_EQUALS | pGREATER_THAN_EQUALS | pLESS_THAN | pGREATER_THAN)
 
-    pDECL_VAR = pNAME + "=" + pEXPR + ";"
-    pDECL_VAR.setParseAction(lambda result: (result[0],result[2]))
+    pDECL_VAR = Keyword("var") + pNAME + "=" + pEXPR + ";"
+    pDECL_VAR.setParseAction(lambda result: (result[1],result[3]))
 
     # hack to get pDECL to match only PDECL_VAR (but still leave room
     # to add to pDECL later)
@@ -828,6 +828,13 @@ def shell ():
             traceback.print_exc()
 
 
+def execute(filename=filename):
+    filename = sys.argv[0]
+    print 'Executing ' + str(filename)
+    f = open(str(filename), 'r')
+    print f.read()
+
         
 # increase stack size to let us call recursive functions quasi comfortably
 sys.setrecursionlimit(10000)
+#execute(filename)

@@ -270,6 +270,34 @@ class EFlip (Exp):
 
         return VDistribution("binomial", np.random.binomial(1, p.value/100.0, 1000))
 
+
+class ESample (Exp):
+
+    def __init__(self, distribution, x=None):
+        self._dist = distribution
+        self._x = x
+
+    def __str__ (self):
+        return "ESample({})".format(self.distribution, self.x)
+
+    def eval(self, env):
+        dist = self._dist
+        x = self._x
+
+        if x == None:
+            if dist.distribution == "binomial":
+                return dist.value[np.randint(0, len(dist.value))]
+
+            if dist.distribution == "normal":
+                 return np.random.normal(dist.value._mu, dist.value._sigma)
+
+            if dist.distribution == "flip":
+                if dist.value[np.randint(0, len(dist.value)] == 1:
+                    return True
+                return False
+        else:
+            return dist.value[x]
+
 #
 # Values
 #
@@ -284,6 +312,16 @@ class VInteger (Value):
     def __init__ (self,i):
         self.value = i
         self.type = "integer"
+
+    def __str__ (self):
+        return str(self.value)
+
+
+class VDouble (Value):
+
+    def __init__ (self, d):
+        self.value = d
+        self.type = "double"
 
     def __str__ (self):
         return str(self.value)
@@ -398,6 +436,7 @@ class VDistribution (Value):
     def __init__(self, d_type, array):
         self.type = "distribution"
         self.distribution = d_type
+        self.value = array
 
         if(self.distribution == "binomial"):
             print sum(array)/float(len(array))
@@ -406,6 +445,8 @@ class VDistribution (Value):
 
     def __str__(self):
         return "<distribution {}>".format(self.distribution)
+
+
 
 # Primitive operations
 
@@ -687,7 +728,10 @@ def parse_imp (input):
     pFLIP = "(" + Keyword("flip") + pEXPR + ")"
     pFLIP.setParseAction(lambda result: EFlip(result[2]))
 
-    pEXPR << (pINTEGER | pBOOLEAN | pSTRING | pIDENTIFIER | pWITH | pIF | pFUN | pARRAY | pNORMAL | pFLIP | pCALL)
+    pSAMPLE = "(" + Keyword("sample") + pEXPR + Optional(pEXPR) + ")"
+    pSAMPLE.setParseAction(lambda result: ESample(result[2], result[3]))
+
+    pEXPR << (pINTEGER | pBOOLEAN | pSTRING | pIDENTIFIER | pWITH | pIF | pFUN | pARRAY | pNORMAL | pFLIP | pCALL | pSAMPLE)
 
     pSTMT = Forward()
 
