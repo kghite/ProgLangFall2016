@@ -278,18 +278,18 @@ class ESample (Exp):
         self._x = x
 
     def __str__ (self):
-        return "ESample({})".format(self.distribution, self.x)
+        return "ESample({})".format(self.distribution, self._x)
 
     def eval(self, env):
-        dist = self._dist
-        x = None if self._x == None else self.x.eval(env)
+        dist = self._dist.eval(env)
+        x = None if self._x == None else self._x.eval(env)
 
         if x == None:
             if dist.distribution == "normal":
-                return VDouble(dist.value[np.randint(0, len(dist.value))])
+                return VDouble(dist.value[np.random.randint(0, len(dist.value))])
 
             if dist.distribution == "binomial":
-                if dist.value[np.randint(0, len(dist.value))] == 1:
+                if dist.value[np.random.randint(0, len(dist.value))] == 1:
                     return VBoolean(True)
                 return VBoolean(False)
         else:
@@ -451,10 +451,10 @@ class VDistribution (Value):
         self.distribution = d_type
         self.value = array
 
-        if(self.distribution == "binomial"):
-            print sum(array)/float(len(array))
-        else:
-            print array
+        # if(self.distribution == "binomial"):
+        #     print sum(array)/float(len(array))
+        # else:
+        #     print array
 
     def __str__(self):
         return "<distribution {}>".format(self.distribution)
@@ -741,10 +741,19 @@ def parse_imp (input):
     pFLIP = "(" + Keyword("flip") + pEXPR + ")"
     pFLIP.setParseAction(lambda result: EFlip(result[2]))
 
-    pSAMPLE = "(" + Keyword("sample") + pEXPR + Optional(pEXPR) + ")"
-    pSAMPLE.setParseAction(lambda result: ESample(result[2], result[3]))
+    pDISTRIBUTION = (pNORMAL | pFLIP)
+    pDISTRIBUTION.setParseAction(lambda result: result)
 
-    pEXPR << (pINTEGER | pBOOLEAN | pSTRING | pIDENTIFIER | pWITH | pIF | pFUN | pARRAY | pNORMAL | pFLIP | pCALL | pSAMPLE)
+    pSAMPLE_NO_PARAM = "(" + Keyword("sample") + pDISTRIBUTION + ")"
+    pSAMPLE_NO_PARAM.setParseAction(lambda result: ESample(result[2]))
+
+    pSAMPLE_PARAM = "(" + Keyword("sample") + pDISTRIBUTION + pEXPR + ")"
+    pSAMPLE_PARAM.setParseAction(lambda result: ESample(result[2], result[3]))
+
+    pSAMPLE = (pSAMPLE_NO_PARAM | pSAMPLE_PARAM)
+    pSAMPLE.setParseAction(lambda result: result)
+
+    pEXPR << (pINTEGER | pBOOLEAN | pSTRING | pIDENTIFIER | pWITH | pIF | pFUN | pARRAY | pDISTRIBUTION | pSAMPLE | pCALL)
 
     pSTMT = Forward()
 
