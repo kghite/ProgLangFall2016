@@ -282,22 +282,35 @@ class ESample (Exp):
 
     def eval(self, env):
         dist = self._dist
-        x = self._x
+        x = None if self._x == None else self.x.eval(env)
 
         if x == None:
-            if dist.distribution == "binomial":
-                return dist.value[np.randint(0, len(dist.value))]
-
             if dist.distribution == "normal":
-                 return np.random.normal(dist.value._mu, dist.value._sigma)
+                return VDouble(dist.value[np.randint(0, len(dist.value))])
 
-            if dist.distribution == "flip":
-                if dist.value[np.randint(0, len(dist.value)] == 1:
-                    return True
-                return False
+            if dist.distribution == "binomial":
+                if dist.value[np.randint(0, len(dist.value))] == 1:
+                    return VBoolean(True)
+                return VBoolean(False)
         else:
-            return dist.value[x]
+            if dist.distribution == "normal":
+                if(x.type != "integer"):
+                    raise Exception ("Cannot get value for a normal distribution with non-integer")
 
+                sigma = np.std(dist.value)
+                mu = np.mean(dist.value)
+                return VDouble(1/(sigma * np.sqrt(2 * np.pi)) * np.exp( - (x.value - mu)**2 / (2 * sigma**2)))
+
+            if dist.distribution == "binomial":
+                if(x.type != "boolean"):
+                    raise Exception ("Cannot get value for a binomial distribution with non-boolean")
+
+                prob = sum(dist.value)/float(len(dist.value))
+
+                if(x.value):
+                    return VDouble(prob)
+                else:
+                    return VDouble(1 - prob)
 #
 # Values
 #
