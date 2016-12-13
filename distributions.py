@@ -111,6 +111,10 @@ class ECall (Exp):
 
     def eval (self,env):
         f = self._fun.eval(env)
+
+        if f.type == "ref":
+            f = f.content
+
         if f.type != "function":
             raise Exception("Runtime error: trying to call a non-function")
         args = [ e.eval(env) for e in self._args]
@@ -278,7 +282,7 @@ class ESample (Exp):
         self._x = x
 
     def __str__ (self):
-        return "ESample({})".format(self.distribution, self._x)
+        return "ESample({})".format(self._dist, self._x)
 
     def eval(self, env):
         dist = self._dist.eval(env)
@@ -311,6 +315,7 @@ class ESample (Exp):
                     return VNumeric(prob)
                 else:
                     return VNumeric(1 - prob)
+
 #
 # Values
 #
@@ -351,7 +356,6 @@ class VClosure (Value):
 
     def __str__ (self):
         return "<function [{}] {}>".format(",".join(self.params),str(self.body))
-
     
 class VRefCell (Value):
 
@@ -745,6 +749,12 @@ def parse_imp (input):
 
     pEXPR << (pINTEGER | pBOOLEAN | pSTRING | pIDENTIFIER | pWITH | pIF | pFUN | pARRAY | pDISTRIBUTION | pSAMPLE | pCALL)
 
+    pBINDING = "(" + pNAME + "->" + pEXPR + ")"
+    pBINDING.setParseAction(lambda result: (result[1], ERefCell(result[3])))
+
+    pBINDINGS = OneOrMore(pBINDING)
+    pBINDINGS.setParseAction(lambda result: [result])
+
     pSTMT = Forward()
 
     pPROD = Keyword("procedure") + pNAME + "(" + pNAMES + ")" + pSTMT
@@ -753,9 +763,12 @@ def parse_imp (input):
     pDECL_VAR = "var" + pNAME + "=" + pEXPR + ";"
     pDECL_VAR.setParseAction(lambda result: (result[1],result[3]))
 
+    pDECL_QUERY = "defquery" + pNAME + "[" + pBINDINGS + "]" + pEXPR + ";"
+    pDECL_QUERY.setParseAction(lambda result: (result[1], EFunction([], ELet(result[3], result[5])))) 
+
     # hack to get pDECL to match only PDECL_VAR (but still leave room
     # to add to pDECL later)
-    pDECL = ( pDECL_VAR | pPROD | NoMatch() )
+    pDECL = ( pDECL_VAR | pPROD | pDECL_QUERY | NoMatch() )
 
     pDECLS = ZeroOrMore(pDECL)
     pDECLS.setParseAction(lambda result: [result])
@@ -781,6 +794,9 @@ def parse_imp (input):
     pSTMT_UPDATE_ARRAY = pNAME + "[" + pEXPR + "]" + Keyword("<-") + pEXPR + ";"
     pSTMT_UPDATE_ARRAY.setParseAction(lambda result: EPrimCall(oper_update_array, [EId(result[0]), result[2], result[5]]))
 
+    pSTMT_DO_QUERY = "doquery" + pNAME + ";"
+    pSTMT_DO_QUERY.setParseAction(lambda result: EPrimCall(oper_print, [ECall(EId(result[1]), [])]))
+
     pFOR = Keyword("for") + "(" + pDECL_OPT + pEXPR + ";" + pSTMT_UPDATE + ")" + pSTMT
     pFOR.setParseAction(lambda result: EFor(result[2], result[3], result[5], result[7]))
 
@@ -803,7 +819,7 @@ def parse_imp (input):
     pSTRING_OPER = pSTRING_OPERS + pEXPR + pEXPRS + ";"
     pSTRING_OPER.setParseAction(lambda result: string_operation(result[0], result[1], result[2]))
 
-    pSTMT << ( pSTRING_OPER | pSTMT_IF_1 | pSTMT_IF_2 | pSTMT_WHILE | pSTMT_PRINT | pSTMT_UPDATE | pSTMT_UPDATE_ARRAY | pSTMT_BLOCK | pFOR | pPROD_CALL)
+    pSTMT << ( pSTRING_OPER | pSTMT_IF_1 | pSTMT_IF_2 | pSTMT_WHILE | pSTMT_PRINT | pSTMT_UPDATE | pSTMT_UPDATE_ARRAY | pSTMT_BLOCK | pFOR | pPROD_CALL | pSTMT_DO_QUERY)
 
     # can't attach a parse action to pSTMT because of recursion, so let's duplicate the parser
     pTOP_STMT = pSTMT.copy()
