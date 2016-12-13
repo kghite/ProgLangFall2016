@@ -213,7 +213,7 @@ class EArray (Exp):
     def eval(self, env):
         v = self._exp.eval(env)
 
-        if(v.type != "integer"):
+        if(v.type != "numeric"):
             raise Exception ("Cannot create an array of non-integer length")
 
         return VArray(v.value, env)
@@ -248,8 +248,8 @@ class ENormal (Exp):
         mu = self._mu.eval(env)
         sigma = self._sigma.eval(env)
 
-        if(mu.type != "integer" or sigma.type != "integer"):
-            raise Exception ("Cannot create normal distribution from non-integer values")
+        if(mu.type != "numeric" or sigma.type != "numeric" and p.type != "numeric"):
+            raise Exception ("Cannot create normal distribution from non-numeric values")
 
         return VDistribution("normal", np.random.normal(mu.value, sigma.value, 1000))
 
@@ -265,8 +265,8 @@ class EFlip (Exp):
     def eval(self, env):
         p = self._p.eval(env)
 
-        if(p.type != "integer"):
-            raise Exception ("Cannot create a binomial distribution from a non-integer value")
+        if(p.type != "numeric" and p.type != "numeric"):
+            raise Exception ("Cannot create a binomial distribution from a non-numeric value")
 
         return VDistribution("binomial", np.random.binomial(1, p.value/100.0, 1000))
 
@@ -286,7 +286,7 @@ class ESample (Exp):
 
         if x == None:
             if dist.distribution == "normal":
-                return VDouble(dist.value[np.random.randint(0, len(dist.value))])
+                return VNumeric(dist.value[np.random.randint(0, len(dist.value))])
 
             if dist.distribution == "binomial":
                 if dist.value[np.random.randint(0, len(dist.value))] == 1:
@@ -294,12 +294,12 @@ class ESample (Exp):
                 return VBoolean(False)
         else:
             if dist.distribution == "normal":
-                if(x.type != "integer"):
+                if(x.type != "numeric" and x.type != "numeric"):
                     raise Exception ("Cannot get value for a normal distribution with non-integer")
 
                 sigma = np.std(dist.value)
                 mu = np.mean(dist.value)
-                return VDouble(1/(sigma * np.sqrt(2 * np.pi)) * np.exp( - (x.value - mu)**2 / (2 * sigma**2)))
+                return VNumeric(1/(sigma * np.sqrt(2 * np.pi)) * np.exp( - (x.value - mu)**2 / (2 * sigma**2)))
 
             if dist.distribution == "binomial":
                 if(x.type != "boolean"):
@@ -308,9 +308,9 @@ class ESample (Exp):
                 prob = sum(dist.value)/float(len(dist.value))
 
                 if(x.value):
-                    return VDouble(prob)
+                    return VNumeric(prob)
                 else:
-                    return VDouble(1 - prob)
+                    return VNumeric(1 - prob)
 #
 # Values
 #
@@ -319,22 +319,12 @@ class Value (object):
     pass
 
 
-class VInteger (Value):
+class VNumeric (Value):
     # Value representation of integers
     
     def __init__ (self,i):
         self.value = i
-        self.type = "integer"
-
-    def __str__ (self):
-        return str(self.value)
-
-
-class VDouble (Value):
-
-    def __init__ (self, d):
-        self.value = d
-        self.type = "double"
+        self.type = "numeric"
 
     def __str__ (self):
         return str(self.value)
@@ -391,7 +381,7 @@ class VString (Value):
         return self.value
 
     def length(self):
-        return VInteger(len(self.value))
+        return VNumeric(len(self.value))
 
     def substring(self, begin, end):
         if (end > len(self.value)-1 or begin < 0):
@@ -464,27 +454,27 @@ class VDistribution (Value):
 # Primitive operations
 
 def oper_plus (v1,v2): 
-    if v1.type == "integer" and v2.type == "integer":
-        return VInteger(v1.value + v2.value)
+    if v1.type == "numeric" and v2.type == "numeric":
+        return VNumeric(v1.value + v2.value)
     raise Exception ("Runtime error: trying to add non-numbers")
 
 def oper_minus (v1,v2):
-    if v1.type == "integer" and v2.type == "integer":
-        return VInteger(v1.value - v2.value)
+    if v1.type == "numeric" and v2.type == "numeric":
+        return VNumeric(v1.value - v2.value)
     raise Exception ("Runtime error: trying to subtract non-numbers")
 
 def oper_times (v1,v2):
-    if v1.type == "integer" and v2.type == "integer":
-        return VInteger(v1.value * v2.value)
+    if v1.type == "numeric" and v2.type == "numeric":
+        return VNumeric(v1.value * v2.value)
     raise Exception ("Runtime error: trying to multiply non-numbers")
 
 def oper_zero (v1):
-    if v1.type == "integer":
+    if v1.type == "numeric":
         return VBoolean(v1.value==0)
     raise Exception ("Runtime error: type error in zero?")
 
 def oper_lessthan (v1, v2):
-    if v1.type == "integer" and v2.type == "integer":
+    if v1.type == "numeric" and v2.type == "numeric":
         if v1.value < v2.value:
             return VBoolean(True)
         else:
@@ -492,7 +482,7 @@ def oper_lessthan (v1, v2):
     raise Exception("Runtime error: trying to compare non-integers")
 
 def oper_greaterthan (v1, v2):
-    if v1.type == "integer" and v2.type == "integer":
+    if v1.type == "numeric" and v2.type == "numeric":
         if v1.value > v2.value:
             return VBoolean(True)
         else:
@@ -500,7 +490,7 @@ def oper_greaterthan (v1, v2):
     raise Exception("Runtime error: trying to compare non-integers")
 
 def oper_equalto (v1, v2):
-    if v1.type == "integer" and v2.type == "integer":
+    if v1.type == "numeric" and v2.type == "numeric":
         if v1.value == v2.value:
             return VBoolean(True)
         else:
@@ -524,7 +514,7 @@ def oper_print (v1):
 
 def oper_update_array(v1, i, v2):
     if v1.type == "ref" and v1.content.type == "array":
-        if(i.type == "integer"):
+        if(i.type == "numeric"):
             if(i.value < len(v1.content.value) and i.value >= 0):
                 v1.content.value[i.value] = v2
                 return VNone()
@@ -533,7 +523,7 @@ def oper_update_array(v1, i, v2):
     raise Exception ("Runtime error: updating a non-reference value or updating non-array")
 
 def oper_index(obj, index):
-    if(obj.content.type == "array" and index.type == "integer"):
+    if(obj.content.type == "array" and index.type == "numeric"):
         if(index.value < len(obj.content.value) and index.value >= 0):
             return obj.content.value[index.value]
         raise Exception ("Array index out of bounds")
@@ -541,12 +531,12 @@ def oper_index(obj, index):
 
 def oper_length(obj):
     if(obj.content.type == "array"):
-        return VInteger(len(obj.content.value))
+        return VNumeric(len(obj.content.value))
 
 def oper_map(obj, func):
     if(obj.content.type == "array" and func.type == "function"):
         init_array = [func.body.eval(zip(func.params,[val]) + func.env) for val in obj.content.value]
-        return VArray(VInteger(len(init_array)), obj.content.env, init_array)
+        return VArray(VNumeric(len(init_array)), obj.content.env, init_array)
 
 def oper_str_length(v1):
     if v1.type != "string":
@@ -694,7 +684,7 @@ def parse_imp (input):
     pNAMES.setParseAction(lambda result: [result])
 
     pINTEGER = Word("0123456789")
-    pINTEGER.setParseAction(lambda result: EValue(VInteger(int(result[0]))))
+    pINTEGER.setParseAction(lambda result: EValue(VNumeric(int(result[0]))))
 
     pBOOLEAN = Keyword("true") | Keyword("false")
     pBOOLEAN.setParseAction(lambda result: EValue(VBoolean(result[0]=="true")))
