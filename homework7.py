@@ -693,7 +693,7 @@ def parse_natural (input):
     pRECORD.setParseAction(lambda result: ERecord(result[1]))
 
     pNOT = Keyword("not") + pBASICEXPR
-    pNOT.setParseAction(lambda result: EPrimCall("not", [result[1]]))
+    pNOT.setParseAction(lambda result: EPrimCall(oper_not, [result[1]]))
 
     pEXPROPR << (pTIMES | pADD | pMINUS | pIF | pEQUALS | pNOT_EQUALS | pLESS_THAN_EQUALS | pGREATER_THAN_EQUALS | pLESS_THAN | pGREATER_THAN | pAND | pOR)
 
