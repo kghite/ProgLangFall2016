@@ -10,7 +10,7 @@
 
 
 
-import sys, os, traceback
+import sys, os, traceback, re
 
 #
 # Expressions
@@ -594,7 +594,7 @@ def parse_natural (input):
 
     RESERVE_WORDS = ["let"]
 
-    idChars = alphas+"_+*-?!=<>"
+    idChars = alphas
 
     pIDENTIFIER = ~MatchFirst(map(Keyword, RESERVE_WORDS)) + Word(idChars, idChars+"0123456789")
     pIDENTIFIER.setParseAction(lambda result: EId(str(result[0])))
@@ -623,7 +623,10 @@ def parse_natural (input):
     pBINDINGS = delimitedList(pBINDING) 
     pBINDINGS.setParseAction(lambda result: [result])
 
-    pBASICEXPR << (pINTEGER + pEXPROPR | pBOOLEAN + pEXPROPR  | pINTEGER | pBOOLEAN | pIDENTIFIER + pEXPROPR | pIDENTIFIER)
+    pEXPR_PAREN = "(" + pEXPR + ")"
+    pEXPR_PAREN.setParseAction(lambda result: result[1])
+
+    pBASICEXPR << (pINTEGER + pEXPROPR | pBOOLEAN + pEXPROPR  | pINTEGER | pBOOLEAN | pIDENTIFIER + pEXPROPR | pEXPR_PAREN + pEXPROPR | pEXPR_PAREN | pIDENTIFIER)
     pBASICEXPR.setParseAction(append_left)
 
     pEXPRSEQ = delimitedList(pBASICEXPR)
@@ -692,7 +695,7 @@ def parse_natural (input):
     pNOT = Keyword("not") + pBASICEXPR
     pNOT.setParseAction(lambda result: EPrimCall("not", [result[1]]))
 
-    pEXPROPR << (pTIMES | pADD | pMINUS | pIF | pEQUALS | pNOT_EQUALS | pLESS_THAN_EQUALS | pGREATER_THAN_EQUALS | pLESS_THAN | pGREATER_THAN)
+    pEXPROPR << (pTIMES | pADD | pMINUS | pIF | pEQUALS | pNOT_EQUALS | pLESS_THAN_EQUALS | pGREATER_THAN_EQUALS | pLESS_THAN | pGREATER_THAN | pAND | pOR)
 
     pDECL_VAR = Keyword("var") + pNAME + "=" + pEXPR + ";"
     pDECL_VAR.setParseAction(lambda result: (result[1],result[3]))
@@ -743,7 +746,7 @@ def parse_natural (input):
 
     pSTMT << ( pSTMT_IF_1 | pSTMT_IF_2 | pSTMT_WHILE | pSTMT_PRINT | pSTMT_UPDATE_RECORD | pSTMT_UPDATE_ARRAY | pSTMT_BLOCK | pFOR | pSTMT_EXPR)
 
-    pEXPR << (pLET | pNOT | pARRAY | pRECORD | pFUN | pFUN_RECURS | pFUN_CALL | pBASICEXPR)
+    pEXPR << (pLET | pNOT | pARRAY | pRECORD | pFUN | pFUN_RECURS | pFUN_CALL | pBASICEXPR | pEXPR_PAREN)
 
     pTOP_STMT = pSTMT.copy()
     pTOP_STMT.setParseAction(lambda result: {"result":"statement",
@@ -828,11 +831,38 @@ def shell ():
             traceback.print_exc()
 
 
-def execute(filename=filename):
-    filename = sys.argv[0]
+def execute(filename):
     print 'Executing ' + str(filename)
     f = open(str(filename), 'r')
-    print f.read()
+    env = initial_env()
+    for line in f.readlines():
+        line = line
+        try:
+            result = parse_natural(line)
+
+            if result["result"] == "statement":
+                stmt = result["stmt"]
+                # print "Abstract representation:", exp
+                v = stmt.eval(env)
+
+            elif result["result"] == "abstract":
+                print result["stmt"]
+
+            elif result["result"] == "quit":
+                return
+
+            elif result["result"] == "declaration":
+                (name,expr) = result["decl"]
+                v = expr.eval(env)
+
+                if(v.type == "ref"):
+                    v = v.content
+
+                var = tuple([name, VRefCell(v)])
+
+                env = update_environment(var, env)
+        except Exception as e:
+            continue
 
         
 # increase stack size to let us call recursive functions quasi comfortably

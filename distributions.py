@@ -298,8 +298,8 @@ class ESample (Exp):
                 return VBoolean(False)
         else:
             if dist.distribution == "normal":
-                if(x.type != "numeric" and x.type != "numeric"):
-                    raise Exception ("Cannot get value for a normal distribution with non-integer")
+                if(x.type != "numeric"):
+                    raise Exception ("Cannot get value for a normal distribution with non-numeric value")
 
                 sigma = np.std(dist.value)
                 mu = np.mean(dist.value)
@@ -309,7 +309,7 @@ class ESample (Exp):
                 if(x.type != "boolean"):
                     raise Exception ("Cannot get value for a binomial distribution with non-boolean")
 
-                prob = sum(dist.value)/float(len(dist.value))
+                prob = int(sum(dist.value)/float(len(dist.value))*100)
 
                 if(x.value):
                     return VNumeric(prob)
@@ -741,7 +741,7 @@ def parse_imp (input):
     pSAMPLE_NO_PARAM = "(" + Keyword("sample") + pDISTRIBUTION + ")"
     pSAMPLE_NO_PARAM.setParseAction(lambda result: ESample(result[2]))
 
-    pSAMPLE_PARAM = "(" + Keyword("sample") + pDISTRIBUTION + pEXPR + ")"
+    pSAMPLE_PARAM = "(" + Keyword("observe") + pDISTRIBUTION + pEXPR + ")"
     pSAMPLE_PARAM.setParseAction(lambda result: ESample(result[2], result[3]))
 
     pSAMPLE = (pSAMPLE_NO_PARAM | pSAMPLE_PARAM)
@@ -905,3 +905,5 @@ def shell_imp ():
             fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
             print(exc_type, fname, exc_tb.tb_lineno)
             traceback.print_exc()
+
+shell_imp()
